@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Delta Algo Trading</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --ink: #e8eef9; --muted: #a3b3cc; --line: #ffffff1f; --panel: #141d33cc; --panel-solid: #0f172a;
+    --accent: #60a5fa; --accent-2: #a78bfa; --warn: #fbbf24; --ok: #34d399; --bad: #f87171;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font: 15px/1.5 "Segoe UI", system-ui, sans-serif; color: var(--ink); margin: 0; min-height: 100vh;
+    background:
+      radial-gradient(900px 500px at 8% -5%, #3b82f64d, transparent 70%),
+      radial-gradient(800px 500px at 100% 0%, #8b5cf64d, transparent 70%),
+      radial-gradient(900px 600px at 50% 110%, #0ea5e926, transparent 70%),
+      #0a1020;
+    background-attachment: fixed;
+  }
+  .page { margin: 0 auto; max-width: 1240px; padding: 28px 20px 40px; }
+  .hero { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 22px; }
+  h1 { font-size: 30px; line-height: 1.2; font-weight: 700; margin: 0; letter-spacing: -.3px; }
+  .title {
+    background: linear-gradient(90deg, #93c5fd, #c4b5fd 60%, #f0abfc);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .hero-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .pill { display: inline-block; padding: 5px 12px; border-radius: 999px; font-size: 13px; font-weight: 600; border: 1px solid var(--line); background: #ffffff0f; }
+  .pill.live { color: #fff; background: linear-gradient(90deg, #dc2626, #ea580c); border-color: transparent; box-shadow: 0 0 18px #dc262680; }
+  h2 { font-size: 17px; font-weight: 650; margin: 0 0 12px; }
+  h2 .muted { font-weight: 400; margin-left: 6px; }
+  .panel {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 18px;
+    box-shadow: 0 12px 34px #00000059; backdrop-filter: blur(10px); margin-bottom: 18px;
+  }
+  #logs { max-height: 70vh; overflow-y: auto; padding-right: 4px; }
+  .muted { color: var(--muted); font-size: 13px; }
+  form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+  .group-box { min-width: 0; margin: 0; padding: 12px 14px 14px; background: #0b122480; border: 1px solid var(--line); border-radius: 12px; }
+  .group-box.wide { grid-column: 1 / -1; }
+  .group-box.danger { border-color: #f8717159; }
+  legend { padding: 0 6px; font-size: 13px; font-weight: 700; letter-spacing: .4px; color: #bfdbfe; }
+  .danger legend { color: #fca5a5; }
+  .fields { display: grid; gap: 12px; }
+  .fields.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  label { display: grid; gap: 5px; font-weight: 600; font-size: 13px; color: var(--muted); }
+  select, input[type=number], input[type=time] {
+    font: inherit; font-weight: 500; color: var(--ink); padding: 9px 10px; border: 1px solid var(--line);
+    border-radius: 10px; width: 100%; background: #0b1224; transition: border-color .15s, box-shadow .15s;
+  }
+  select:focus, input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px #60a5fa40; }
+  option { background: var(--panel-solid); }
+  .toggle { display: flex; align-items: center; gap: 9px; font-size: 14px; color: var(--ink); cursor: pointer; }
+  .toggle input { width: 17px; height: 17px; accent-color: var(--accent); flex: none; }
+  .buttons { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; padding-top: 6px; }
+  button {
+    font: inherit; font-weight: 600; padding: 9px 15px; border: 1px solid var(--line); border-radius: 10px;
+    cursor: pointer; background: #ffffff12; color: var(--ink); transition: transform .12s, background .15s, box-shadow .15s;
+  }
+  button:hover:not(:disabled) { background: #ffffff24; transform: translateY(-1px); }
+  button.primary { background: linear-gradient(90deg, #2563eb, #7c3aed); border-color: transparent; color: #fff; box-shadow: 0 6px 20px #4f46e566; }
+  button.primary:hover:not(:disabled) { background: linear-gradient(90deg, #1d4ed8, #6d28d9); }
+  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button:disabled { opacity: .5; cursor: wait; }
+  .banner { padding: 10px 12px; border: 1px solid var(--warn); color: var(--warn); background: #fbbf2414; border-radius: 10px; margin-top: 12px; }
+  .saved { color: var(--ok); margin-top: 10px; min-height: 22px; }
+  pre { white-space: pre-wrap; overflow-wrap: anywhere; font: 14px/1.55 "Segoe UI", system-ui, sans-serif; margin: 0; }
+  strong { color: #fff; }
+  .card { background: #0b1224b3; border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 12px; padding: 12px 14px; margin-top: 10px; }
+  .card:first-child { margin-top: 0; }
+  .card.warning { border-color: #fbbf2466; border-left-color: var(--warn); }
+  .card .muted { margin-bottom: 6px; }
+  #schedule { margin-top: 14px; }
+  #pnl-text { font-weight: 700; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
+  .tile { position: relative; overflow: hidden; background: #0b1224b3; border: 1px solid var(--line); border-radius: 12px; padding: 13px 15px; }
+  .tile::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 3px; background: linear-gradient(90deg, var(--accent), var(--accent-2)); }
+  .tile-value { font-size: 25px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .profit { color: var(--ok); }
+  .loss { color: var(--bad); }
+  .tone-balance { color: #60a5fa; }
+  .tone-available { color: var(--ok); }
+  .tone-blocked { color: var(--warn); }
+  .tile .rupee { color: #c4b5fd; font-weight: 600; }
+  strong.sell { color: #22d3ee; }
+  strong.stoploss { color: var(--warn); }
+  table { border-collapse: collapse; width: 100%; margin-top: 12px; font-size: 14px; font-variant-numeric: tabular-nums; }
+  th, td { padding: 8px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; }
+  th { font-size: 13px; font-weight: 600; color: var(--muted); }
+  .table-scroll { overflow-x: auto; }
+  .section { margin-top: 18px; }
+  [hidden] { display: none; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } button:hover:not(:disabled) { transform: none; } }
+  @media (max-width: 900px) {
+    form { grid-template-columns: minmax(0, 1fr); }
+    .fields.four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 480px) { .fields.four { grid-template-columns: minmax(0, 1fr); } h1 { font-size: 25px; } }
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="hero">
+    <div>
+      <h1>📈 <span class="title">Delta Algo Trading</span></h1>
+      <div class="muted">Delta Exchange India</div>
+    </div>
+    <div class="hero-meta">
+      <span id="trading-mode" class="pill"></span>
+      <span class="pill">🕒 <span id="clock"></span> IST</span>
+    </div>
+  </header>
+  <div id="telegram-banner" class="banner" hidden>Telegram is turned on but isn't set up, so alerts will only show in the logs. Add your details to the .env file and restart.</div>
+
+  <section class="panel">
+    <h2>💰 Account <span id="account-time" class="muted"></span></h2>
+    <div id="account-tiles" class="tiles"></div>
+    <div id="account-error" class="banner" role="alert" hidden></div>
+    <div class="table-scroll">
+      <table id="positions-table" hidden>
+        <thead><tr><th>Position</th><th>Size</th><th>Entry</th><th>Mark</th><th>PnL</th></tr></thead>
+        <tbody id="positions-body"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="panel">
+  <form id="form">
+    <fieldset class="group-box wide">
+      <legend>🎯 STRIKE SELECTION</legend>
+      <div class="fields four">
+        <label>Symbol
+          <select id="symbol"><option>BTC</option><option>ETH</option></select>
+        </label>
+        <label>Expiry
+          <select id="expiry"></select>
+        </label>
+        <label>Multiplier
+          <input id="multiplier" type="number" step="any" min="0.01" required>
+        </label>
+        <label>ATM reference
+          <select id="atm_reference"><option value="spot">Spot</option><option value="futures">Futures</option></select>
+        </label>
+      </div>
+    </fieldset>
+
+    <fieldset class="group-box">
+      <legend>⏰ SCHEDULE</legend>
+      <div class="fields">
+        <label>Entry time (IST)
+          <input id="entry_time" type="time" required>
+        </label>
+        <label class="toggle"><input id="enabled" type="checkbox"> Run the alert every day at the entry time</label>
+      </div>
+    </fieldset>
+
+    <fieldset class="group-box">
+      <legend>📊 PNL UPDATES</legend>
+      <div class="fields">
+        <label>PnL interval (minutes)
+          <input id="pnl_interval_minutes" type="number" step="1" min="1" max="1440" required>
+        </label>
+        <label class="toggle"><input id="pnl_enabled" type="checkbox"> Send account PnL to Telegram while positions are open</label>
+      </div>
+    </fieldset>
+
+    <fieldset class="group-box danger">
+      <legend>⚡ LIVE TRADING</legend>
+      <div class="fields">
+        <label>Order size (contracts per side)
+          <input id="trade_size" type="number" step="1" min="1" max="1000" required>
+        </label>
+        <label class="toggle"><input id="trading_enabled" type="checkbox"> Place real orders at the scheduled entry time</label>
+      </div>
+    </fieldset>
+
+    <div class="buttons">
+      <button class="primary" type="submit">Save settings</button>
+      <button id="send-now" type="button">Run alert now</button>
+      <button id="check-pnl" type="button">Check PnL</button>
+    </div>
+  </form>
+  <div id="schedule" class="card"></div>
+  <div id="status" class="saved" role="status"></div>
+  <div id="error" class="banner" role="alert" hidden></div>
+
+  <div id="pnl-section" class="section" hidden>
+    <h2>📊 Latest PnL</h2>
+    <div id="pnl-card" class="card"><div id="pnl-meta" class="muted"></div><pre id="pnl-text"></pre></div>
+  </div>
+
+  </section>
+
+  <section class="panel">
+    <h2>📜 Logs <span class="muted">cleared daily at midnight IST</span></h2>
+    <div id="logs"><div class="muted">No alerts logged yet.</div></div>
+  </section>
+</div>
+
+<script>
+const el = id => document.getElementById(id);
+
+async function api(path, body) {
+  const options = body === undefined ? {} : {
+    method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body),
+  };
+  const response = await fetch(path, options);
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || "Something went wrong.");
+  return data;
+}
+
+function showError(message) {
+  el("error").textContent = message;
+  el("error").hidden = !message;
+}
+
+function formValues() {
+  return {
+    symbol: el("symbol").value,
+    expiry: el("expiry").value,
+    multiplier: el("multiplier").valueAsNumber,
+    atm_reference: el("atm_reference").value,
+    entry_time: el("entry_time").value,
+    enabled: el("enabled").checked,
+    pnl_enabled: el("pnl_enabled").checked,
+    pnl_interval_minutes: el("pnl_interval_minutes").valueAsNumber,
+    trading_enabled: el("trading_enabled").checked,
+    trade_size: el("trade_size").valueAsNumber,
+  };
+}
+
+async function loadExpiries(selected) {
+  const select = el("expiry");
+  select.replaceChildren(new Option("Loading…", ""));
+  try {
+    const {expiries} = await api(`/api/expiries?symbol=${el("symbol").value}`);
+    select.replaceChildren(new Option("Select expiry", ""),
+      ...expiries.map(expiry => new Option(expiry.label, expiry.value)));
+    if (selected && expiries.some(expiry => expiry.value === selected)) {
+      select.value = selected;
+    } else if (selected) {
+      showError("Your saved expiry is no longer listed. Select a new one and save.");
+    }
+  } catch (error) {
+    select.replaceChildren(new Option("Could not load expiries", ""));
+    showError(error.message);
+  }
+}
+
+function renderMessage(target, message) {
+  // The odd-numbered parts are the captured "SELL CALL/PUT <strike>" and "Stoploss: <price>" text.
+  target.replaceChildren(...message.split(/^(SELL (?:CALL|PUT) [\d,.]+|Stoploss: \S+)/m).map((part, index) => {
+    if (index % 2 === 0) return document.createTextNode(part);
+    const strong = document.createElement("strong");
+    strong.textContent = part;
+    strong.className = part.startsWith("Stoploss") ? "stoploss" : "sell";
+    return strong;
+  }));
+}
+
+function money(value) {
+  return value === null || value === undefined ? "n/a"
+    : value.toLocaleString("en-US", {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+
+function signedPnl(target, value, inr) {
+  const up = value > 0;
+  const down = value < 0;
+  target.classList.remove("profit", "loss");
+  if (up) target.classList.add("profit");
+  if (down) target.classList.add("loss");
+  const amount = inr === null || inr === undefined ? money(value) : rupees(inr);
+  target.textContent = `${up ? "▲ +" : down ? "▼ " : ""}${amount}`;
+}
+
+function rupees(value) {
+  return value === null || value === undefined ? ""
+    : `${value < 0 ? "-" : ""}₹${Math.abs(value).toLocaleString("en-IN", {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+}
+
+function tile(label, value, secondary, tone) {
+  const box = document.createElement("div");
+  box.className = "tile";
+  const name = document.createElement("div");
+  name.className = "muted";
+  name.textContent = label;
+  const number = document.createElement("div");
+  number.className = "tile-value" + (tone ? ` ${tone}` : "");
+  if (typeof value === "function") value(number); else number.textContent = value;
+  box.append(name, number);
+  if (secondary) {
+    const second = document.createElement("div");
+    second.className = "muted rupee";
+    second.textContent = secondary;
+    box.append(second);
+  }
+  return box;
+}
+
+function renderAccount(account) {
+  const tiles = [];
+  for (const wallet of account.funds || []) {
+    tiles.push(tile(`Balance (${wallet.asset})`, money(wallet.balance), rupees(wallet.balance_inr), "tone-balance"));
+    tiles.push(tile(`Available (${wallet.asset})`, money(wallet.available), rupees(wallet.available_inr), "tone-available"));
+    tiles.push(tile(`Blocked margin (${wallet.asset})`, money(wallet.blocked), rupees(wallet.blocked_inr), "tone-blocked"));
+  }
+  if (account.funds && !account.funds.length) tiles.push(tile("Funds", "0.00"));
+  if (account.positions) {
+    const {total, total_inr} = account.positions;
+    tiles.push(tile("Live unrealized PnL", number => signedPnl(number, total, total_inr),
+      total_inr === null ? "" : `${money(total)} USD`));
+  }
+  el("account-tiles").replaceChildren(...tiles);
+
+  const errors = [account.funds_error, account.positions_error].filter(Boolean);
+  el("account-error").textContent = [...new Set(errors)].join(" ");
+  el("account-error").hidden = !errors.length;
+
+  const rows = account.positions ? account.positions.rows : [];
+  el("positions-table").hidden = !rows.length;
+  el("positions-body").replaceChildren(...rows.map(row => {
+    const line = document.createElement("tr");
+    const cells = [row.symbol, row.size, money(row.entry), money(row.mark)].map(text => {
+      const cell = document.createElement("td");
+      cell.textContent = text;
+      return cell;
+    });
+    const pnlCell = document.createElement("td");
+    signedPnl(pnlCell, row.pnl, row.pnl_inr);
+    line.append(...cells, pnlCell);
+    return line;
+  }));
+  el("account-time").textContent = `updated ${account.time} IST`
+    + (rows.length ? "" : " · no open positions");
+}
+
+let accountLoading = false;
+
+async function refreshAccount() {
+  if (accountLoading) return;
+  accountLoading = true;
+  try {
+    renderAccount(await api("/api/account"));
+  } catch (error) {
+    el("account-error").textContent = "Can't load account data right now.";
+    el("account-error").hidden = false;
+  } finally {
+    accountLoading = false;
+  }
+}
+
+let shownPnlTime = null;
+
+function renderPnl(result) {
+  if (!result || result.time === shownPnlTime) return;
+  shownPnlTime = result.time;
+  el("pnl-meta").textContent = `${result.time} IST · Telegram: ${result.telegram}`;
+  renderMessage(el("pnl-text"), result.message);
+  el("pnl-card").className = "card" + (result.kind === "warning" ? " warning" : "");
+  el("pnl-section").hidden = false;
+}
+
+function renderLogs(logs) {
+  if (!logs.length) {
+    const empty = document.createElement("div");
+    empty.className = "muted";
+    empty.textContent = "No alerts logged yet.";
+    el("logs").replaceChildren(empty);
+    return;
+  }
+  el("logs").replaceChildren(...logs.map(entry => {
+    const card = document.createElement("div");
+    card.className = "card" + (entry.kind === "warning" ? " warning" : "");
+    const meta = document.createElement("div");
+    meta.className = "muted";
+    meta.textContent = `${entry.time} IST · ${entry.source}`
+      + (entry.telegram === "off" ? "" : ` · Telegram: ${entry.telegram}`);
+    const text = document.createElement("pre");
+    renderMessage(text, entry.message);
+    card.append(meta, text);
+    return card;
+  }));
+}
+
+async function refresh() {
+  try {
+    const state = await api("/api/state");
+    el("clock").textContent = state.now;
+    el("telegram-banner").hidden = !state.telegram_enabled || state.telegram_configured;
+    renderLogs(state.logs);
+    renderPnl(state.pnl);
+    const {enabled, entry_time, symbol, pnl_enabled, pnl_interval_minutes, trading_enabled, trade_size, pending_stops} = state.settings;
+    el("trading-mode").textContent = trading_enabled
+      ? `⚡ LIVE TRADING ON, ${trade_size} per side` : "⏸️ Live trading OFF: alerts only";
+    el("trading-mode").className = "pill" + (trading_enabled ? " live" : "");
+    el("schedule").textContent = (enabled
+      ? `Saved schedule: ON. ${symbol} alert runs daily at ${entry_time} IST.`
+      : "Saved schedule: OFF. No alert will run at the entry time. Tick the daily box and save to turn it on.")
+      + (pnl_enabled ? ` PnL updates: ON, every ${pnl_interval_minutes} min.` : " PnL updates: OFF.")
+      + (trading_enabled ? ` LIVE TRADING: ON, real orders of ${trade_size} per side.` : " Live trading: OFF.")
+      + (pending_stops.length ? ` Watching ${pending_stops.length} order(s) to place separate stoplosses. Keep the app running.` : "");
+    el("schedule").className = "card" + (enabled && !trading_enabled ? "" : " warning");
+    return state;
+  } catch (error) {
+    showError("Can't reach the app. Check that it's still running.");
+  }
+}
+
+async function action(button, work) {
+  showError("");
+  el("status").textContent = "";
+  button.disabled = true;
+  try {
+    await work();
+  } catch (error) {
+    showError(error.message);
+  } finally {
+    button.disabled = false;
+  }
+}
+
+el("symbol").addEventListener("change", () => { showError(""); loadExpiries(); });
+
+el("form").addEventListener("submit", event => {
+  event.preventDefault();
+  const values = formValues();
+  action(event.submitter, async () => {
+    await api("/api/settings", values);
+    el("status").textContent = "Settings saved.";
+    await refresh();
+  });
+});
+
+el("send-now").addEventListener("click", event => action(event.currentTarget, async () => {
+  const entry = await api("/api/send-now", formValues());
+  el("status").textContent = entry.telegram === "off" ? "Added to logs." : `Added to logs. Telegram: ${entry.telegram}`;
+  await refresh();
+}));
+
+el("check-pnl").addEventListener("click", event => action(event.currentTarget, async () => {
+  renderPnl(await api("/api/pnl"));
+}));
+
+(async () => {
+  const state = await refresh();
+  if (!state) return;
+  const saved = state.settings;
+  el("symbol").value = saved.symbol;
+  el("multiplier").value = saved.multiplier;
+  el("atm_reference").value = saved.atm_reference;
+  el("entry_time").value = saved.entry_time;
+  el("enabled").checked = saved.enabled;
+  el("pnl_enabled").checked = saved.pnl_enabled;
+  el("pnl_interval_minutes").value = saved.pnl_interval_minutes;
+  el("trading_enabled").checked = saved.trading_enabled;
+  el("trade_size").value = saved.trade_size;
+  refreshAccount();
+  setInterval(refreshAccount, 5000);
+  await loadExpiries(saved.expiry);
+  setInterval(refresh, 5000);
+})();
+</script>
+</body>
+</html>
