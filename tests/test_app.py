@@ -1183,5 +1183,51 @@ class Validation(unittest.TestCase):
                 app.validate({**self.BODY, **change}, True)
 
 
+class DashboardAccess(unittest.TestCase):
+    PUBLIC = "65.2.227.93:8765"
+    REMOTE = "203.0.113.9"
+    GOOD_COOKIE = "dashboard_key=secret-key"
+
+    def setUp(self):
+        patcher = mock.patch.dict(app.os.environ, {"DASHBOARD_KEY": "secret-key", "PUBLIC_HOST": "65.2.227.93"})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_local_address_needs_a_local_client(self):
+        self.assertTrue(app.is_allowed("127.0.0.1:8765", "127.0.0.1", None))
+        self.assertTrue(app.is_allowed("localhost:8765", "127.0.0.1", None))
+
+    def test_remote_client_cannot_fake_the_local_address(self):
+        self.assertFalse(app.is_allowed("127.0.0.1:8765", self.REMOTE, None))
+        self.assertFalse(app.is_allowed("localhost:8765", self.REMOTE, self.GOOD_COOKIE))
+
+    def test_public_address_needs_the_right_key(self):
+        self.assertTrue(app.is_allowed(self.PUBLIC, self.REMOTE, self.GOOD_COOKIE))
+        self.assertTrue(app.is_allowed(self.PUBLIC, self.REMOTE, f"other=1; {self.GOOD_COOKIE}"))
+        for cookie in (None, "", "dashboard_key=wrong", "other=secret-key", "dashboard_key=", "bad;;=cookie"):
+            with self.subTest(cookie=cookie):
+                self.assertFalse(app.is_allowed(self.PUBLIC, self.REMOTE, cookie))
+
+    def test_loopback_client_still_needs_the_key_on_the_public_address(self):
+        self.assertFalse(app.is_allowed(self.PUBLIC, "127.0.0.1", None))
+
+    def test_other_hosts_are_refused_even_with_the_key(self):
+        for host in ("evil.example", "65.2.227.93", "65.2.227.93:80", None):
+            with self.subTest(host=host):
+                self.assertFalse(app.is_allowed(host, self.REMOTE, self.GOOD_COOKIE))
+
+    def test_public_address_is_closed_without_a_key_set(self):
+        for missing in ("DASHBOARD_KEY", "PUBLIC_HOST"):
+            with self.subTest(missing=missing), mock.patch.dict(app.os.environ):
+                del app.os.environ[missing]
+                self.assertFalse(app.is_allowed(self.PUBLIC, self.REMOTE, self.GOOD_COOKIE))
+
+    def test_empty_key_never_matches(self):
+        self.assertFalse(app.key_matches(""))
+        with mock.patch.dict(app.os.environ, {"DASHBOARD_KEY": ""}):
+            self.assertFalse(app.key_matches(""))
+            self.assertFalse(app.is_allowed(self.PUBLIC, self.REMOTE, "dashboard_key="))
+
+
 if __name__ == "__main__":
     unittest.main()

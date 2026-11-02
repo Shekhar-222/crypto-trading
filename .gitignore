@@ -2,3 +2,4 @@
 settings.json
 logs.jsonl
 __pycache__/
+*.pem

@@ -1,4 +1,5 @@
 """Logs a daily option-selling strike alert, with optional Telegram. Run: python app.py, open the URL."""
+import hmac
 import json
 import math
 import os
@@ -7,6 +8,7 @@ import threading
 import time
 from collections import deque
 from datetime import datetime, timedelta, timezone
+from http.cookies import CookieError, SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -21,6 +23,8 @@ from strikes import SignalError
 
 HOST = "127.0.0.1"
 PORT = 8765
+KEY_COOKIE = "dashboard_key"
+KEY_COOKIE_RULES = "Path=/; Max-Age=31536000; HttpOnly; SameSite=Lax"
 ROOT = Path(__file__).parent
 SETTINGS_FILE = ROOT / "settings.json"
 LOG_FILE = ROOT / "logs.jsonl"
@@ -410,6 +414,34 @@ def run_every_second(tick, name):
         time.sleep(1)
 
 
+def dashboard_key():
+    return os.environ.get("DASHBOARD_KEY", "")
+
+
+def key_matches(value):
+    key = dashboard_key()
+    return bool(key) and hmac.compare_digest(value.encode(), key.encode())
+
+
+def is_public_host(host):
+    public_host = os.environ.get("PUBLIC_HOST", "")
+    return bool(public_host and dashboard_key()) and host == f"{public_host}:{PORT}"
+
+
+def is_allowed(host, client_ip, cookie_header):
+    """The local address needs a local client, which stops other websites and spoofed Host headers.
+    The public address needs the secret key, saved in a cookie by the secret link."""
+    if host in (f"{HOST}:{PORT}", f"localhost:{PORT}"):
+        return client_ip == HOST
+    if not is_public_host(host):
+        return False
+    try:
+        morsel = SimpleCookie(cookie_header or "").get(KEY_COOKIE)
+    except CookieError:
+        return False
+    return morsel is not None and key_matches(morsel.value)
+
+
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass
@@ -423,13 +455,23 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def trusted(self):
-        # Stops other websites in the browser from reaching this local app.
-        return self.headers.get("Host") in (f"{HOST}:{PORT}", f"localhost:{PORT}")
+        return is_allowed(self.headers.get("Host"), self.client_address[0], self.headers.get("Cookie"))
+
+    def open_secret_link(self):
+        """Save the key from the link in a cookie, then drop it from the address bar."""
+        self.send_response(302)
+        self.send_header("Set-Cookie", f"{KEY_COOKIE}={dashboard_key()}; {KEY_COOKIE_RULES}")
+        self.send_header("Location", "/")
+        self.send_header("Content-Length", "0")
+        self.end_headers()
 
     def do_GET(self):
-        if not self.trusted():
-            return self.respond(403, {"error": "Forbidden"})
         url = urlparse(self.path)
+        link_key = parse_qs(url.query).get("key", [""])[0]
+        if url.path == "/" and is_public_host(self.headers.get("Host")) and key_matches(link_key):
+            return self.open_secret_link()
+        if not self.trusted():
+            return self.respond(404, {"error": "Not found"})
         if url.path == "/":
             page = (ROOT / "static" / "index.html").read_bytes()
             return self.respond(200, page, "text/html; charset=utf-8")
@@ -466,7 +508,9 @@ class Handler(BaseHTTPRequestHandler):
         return self.respond(404, {"error": "Not found"})
 
     def do_POST(self):
-        if not self.trusted() or self.headers.get("Content-Type") != "application/json":
+        if not self.trusted():
+            return self.respond(404, {"error": "Not found"})
+        if self.headers.get("Content-Type") != "application/json":
             return self.respond(403, {"error": "Forbidden"})
         path = urlparse(self.path).path
         try:
@@ -499,7 +543,9 @@ def main():
     threading.Thread(target=run_every_second, args=(logs_tick, "logs"), daemon=True).start()
     threading.Thread(target=run_every_second, args=(stops_tick, "stoploss"), daemon=True).start()
     print(f"Open http://{HOST}:{PORT} (keep this window open for alerts to fire)")
-    ThreadingHTTPServer((HOST, PORT), Handler).serve_forever()
+    # Only listen beyond this machine once a secret key protects the public address.
+    public = bool(os.environ.get("PUBLIC_HOST") and dashboard_key())
+    ThreadingHTTPServer(("0.0.0.0" if public else HOST, PORT), Handler).serve_forever()
 
 
 if __name__ == "__main__":
