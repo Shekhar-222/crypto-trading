@@ -420,22 +420,29 @@ def position_extras(positions):
     return ltps, stops
 
 
-def check_pnl(account, now):
-    """Return (kind, message), where kind is pnl, none or warning."""
+def pnl_report(account, now):
+    """Return (kind, message, summary), where kind is pnl, none or warning.
+    The summary, for a pnl, is what goes into an update that combines accounts."""
     time_label = now.strftime("%d %b %Y %H:%M")
     try:
         with signing(account):
             positions = [p for p in delta_client.get_positions() if pnl.is_open(p)]
             if not positions:
-                return "none", f"No open positions at {time_label} IST."
+                return "none", f"No open positions at {time_label} IST.", None
             rate = pnl.usd_inr_rate(delta_client.get_wallets())
             ltps, stops = position_extras(positions)
-        return "pnl", pnl.format_positions(positions, rate, ltps, stops)
+        summary = pnl.account_summary(positions, rate, ltps, stops)
+        return "pnl", pnl.format_positions(positions, rate, ltps, stops), summary
     except DeltaError as error:
         reason = str(error)
     except (TypeError, ValueError, KeyError, AttributeError) as error:
         reason = f"Delta returned unexpected position data: {error!r}"
-    return "warning", f"⚠️ PNL CHECK FAILED: {time_label} IST\n\n{reason}"
+    return "warning", f"⚠️ PNL CHECK FAILED: {time_label} IST\n\n{reason}", None
+
+
+def check_pnl(account, now):
+    """Return (kind, message), where kind is pnl, none or warning."""
+    return pnl_report(account, now)[:2]
 
 
 def account_section(fetch, summarize):
@@ -471,6 +478,20 @@ def account_snapshot(account, now):
     }
 
 
+def pnl_due(account, state, now):
+    """Updates run on the clock, every interval counted from midnight IST, so accounts with
+    the same interval are checked in the same minute and share one Telegram message."""
+    minute = now.hour * 60 + now.minute
+    return minute % account["pnl_interval_minutes"] == 0 and state["last_check"] != f"{now:%Y-%m-%d %H:%M}"
+
+
+def send_pnl_updates(reports):
+    """One message for all accounts with open positions this minute. Returns the Telegram status."""
+    messages = pnl.format_combined([(account["name"], *summary) for account, _, summary in reports])
+    statuses = [notify_telegram("pnl", message) for message in messages]
+    return statuses[0] if len(set(statuses)) == 1 else ", ".join(statuses)
+
+
 def pnl_tick(now):
     due = []
     with lock:
@@ -482,16 +503,18 @@ def pnl_tick(now):
                 state["last_check"] = None
                 state["failing"] = False
                 continue
-            if state["last_check"] and now - state["last_check"] < timedelta(minutes=account["pnl_interval_minutes"]):
+            if not pnl_due(account, state, now):
                 continue
-            state["last_check"] = now
+            state["last_check"] = f"{now:%Y-%m-%d %H:%M}"
             due.append((json.loads(json.dumps(account)), state["failing"]))
 
-    for account, already_failing in due:
-        kind, message = check_pnl(account, now)
+    results = [(account, already_failing, *pnl_report(account, now)) for account, already_failing in due]
+    reports = [(account, message, summary) for account, _, kind, message, summary in results if kind == "pnl"]
+    combined_status = send_pnl_updates(reports) if reports else "not sent"
+    for account, already_failing, kind, message, _ in results:
         telegram = "not sent"
         if kind == "pnl":
-            telegram = notify_telegram(kind, message, account)
+            telegram = combined_status
         elif kind == "warning" and not already_failing:
             # Warn once per outage, not every interval.
             telegram = notify_telegram(kind, message, account)

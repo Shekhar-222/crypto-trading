@@ -393,6 +393,40 @@ class PnlMessages(unittest.TestCase):
         self.assertIn(f"\n🟢 {POSITION['product_symbol']}\n", message)
         self.assertIn(f"\n🔴 {LOSING['product_symbol']}\n", message)
 
+    def test_telegram_update_shows_each_accounts_pnl_then_its_positions(self):
+        shekhar = ["", "🟢 P-BTC-75200-031126", "Size -100 | PnL ₹63.75"]
+        suraj = ["", "🔴 C-BTC-86000-131126", "Size -100 | PnL -₹191.25", "", "P-BTC-70000-131126", "Size -1 | PnL ₹0.00"]
+        message, = pnl.format_combined([("Shekhar", 0.75, 63.75, shekhar), ("Suraj", -2.25, -191.25, suraj)])
+        self.assertEqual(message, (
+            pnl.TITLE_PADDING + "📊 PNL UPDATE📊\n\n"
+            "🟢 Shekhar : ₹63.75  ($0.75)\n\n"
+            "🔴 Suraj : -₹191.25  (-$2.25)\n\n"
+            "=========================\n\n"
+            + pnl.NAME_PADDING + "👤 Shekhar\n\n🟢 P-BTC-75200-031126\nSize -100 | PnL ₹63.75\n\n"
+            "=========================\n\n"
+            + pnl.NAME_PADDING + "👤 Suraj\n\n🔴 C-BTC-86000-131126\nSize -100 | PnL -₹191.25\n\nP-BTC-70000-131126\nSize -1 | PnL ₹0.00\n\n"
+            "========================="
+        ))
+
+    def test_zero_pnl_has_no_dot(self):
+        message, = pnl.format_combined([("Suresh", 0, 0, ["", "x", "y"])])
+        self.assertIn("\n\nSuresh : ₹0.00  ($0.00)\n", message)
+
+    def test_long_update_splits_with_the_summary_first(self):
+        details = ["", *[f"🟢 POSITION-{n}\n" + "x" * 300 for n in range(5)]]
+        reports = [(f"Account {n}", 1.0, 85.0, details) for n in range(6)]
+        messages = pnl.format_combined(reports)
+        self.assertGreater(len(messages), 1)
+        self.assertTrue(all(len(message) <= pnl.MESSAGE_LIMIT for message in messages))
+        self.assertTrue(messages[0].startswith(pnl.TITLE_PADDING + "📊 PNL UPDATE📊\n\n"))
+        for n in range(6):
+            self.assertIn(f"Account {n} : ₹85.00  ($1.00)", messages[0])
+        self.assertEqual(sum(message.count("👤 Account") for message in messages), 6)
+        for message in messages:
+            self.assertTrue(message.endswith("\n\n" + pnl.DIVIDER))
+        for message in messages[1:]:
+            self.assertTrue(message.startswith(pnl.NAME_PADDING + "👤 Account"))
+
     def test_dollar_format(self):
         for value, expected in ((0, "$0.00"), (-0.001, "$0.00"), (5.753, "$5.75"), (-1234.5, "-$1,234.50")):
             with self.subTest(value=value):
@@ -552,10 +586,16 @@ class AccountPanel(unittest.TestCase):
         self.assertIn("unexpected account data", result["positions_error"])
 
 
+SUMMARY = (0.75, 63.75, ["", "🟢 P-BTC-75200-031126", "Size -100 | PnL ₹63.75"])
+SINGLE_UPDATE = (pnl.TITLE_PADDING + "📊 PNL UPDATE📊\n\n🟢 Main : ₹63.75  ($0.75)\n\n=========================\n\n"
+                 + pnl.NAME_PADDING + "👤 Main\n\n🟢 P-BTC-75200-031126\nSize -100 | PnL ₹63.75\n\n=========================")
+
+
 class PnlSchedule(unittest.TestCase):
     def tick(self, now, check, **config):
         self.live[0].update({"pnl_enabled": True, "pnl_interval_minutes": 5, **config})
-        with mock.patch.object(app, "check_pnl", return_value=check) as check_call, \
+        report = (*check, SUMMARY if check[0] == "pnl" else None)
+        with mock.patch.object(app, "pnl_report", return_value=report) as check_call, \
                 mock.patch.object(app, "add_log") as log, \
                 mock.patch.object(app, "notify_telegram", return_value="sent") as notify:
             app.pnl_tick(now)
@@ -567,16 +607,51 @@ class PnlSchedule(unittest.TestCase):
         self.addCleanup(patcher.stop)
         self.live = accounts_in_settings(self, CONFIG)
 
-    def test_sends_then_waits_for_the_interval(self):
+    def test_runs_on_the_clock_once_per_minute(self):
         signal = ("pnl", "update")
-        check, notify, _ = self.tick(NOW, signal)
+        check, notify, _ = self.tick(NOW, signal)  # 09:30 is a 5-minute mark.
         check.assert_called_once()
-        notify.assert_called_once_with("pnl", "update", mock.ANY)
-        self.assertEqual(notify.call_args.args[2]["name"], "Main")
-        check, notify, _ = self.tick(NOW + timedelta(minutes=4, seconds=59), signal)
+        notify.assert_called_once_with("pnl", SINGLE_UPDATE)
+        check, _, _ = self.tick(NOW + timedelta(seconds=40), signal)
         check.assert_not_called()
+        for minutes in (1, 2, 3, 4):
+            check, _, _ = self.tick(NOW + timedelta(minutes=minutes), signal)
+            check.assert_not_called()
         check, notify, _ = self.tick(NOW + timedelta(minutes=5), signal)
         notify.assert_called_once()
+
+    def test_off_the_mark_waits_for_the_next_one(self):
+        check, _, _ = self.tick(NOW.replace(minute=32), ("pnl", "update"))
+        check.assert_not_called()
+        check, _, _ = self.tick(NOW.replace(minute=35, second=59), ("pnl", "update"))
+        check.assert_called_once()
+
+    def test_accounts_due_together_share_one_message(self):
+        for index, name in ((2, "Suraj"), (3, "Suresh")):
+            self.live.append({**json.loads(json.dumps(CONFIG)), "id": f"acc{index}", "name": name,
+                              "pnl_enabled": True, "pnl_interval_minutes": 5})
+        _, notify, _ = self.tick(NOW, ("pnl", "update"))
+        notify.assert_called_once()
+        self.assertEqual(notify.call_args.args[0], "pnl")
+        self.assertEqual(len(notify.call_args.args), 2)  # Names are in the lines, so no label on top.
+        message = notify.call_args.args[1]
+        self.assertTrue(message.startswith(pnl.TITLE_PADDING + "📊 PNL UPDATE📊\n\n🟢 "))
+        self.assertNotIn("Total", message)
+        for name in ("Main", "Suraj", "Suresh"):
+            self.assertIn(f"🟢 {name} : ₹63.75  ($0.75)", message)
+        self.assertEqual(message.count("🟢 P-BTC-75200-031126"), 3)
+        self.assertLess(message.index("Suresh : "), message.index("👤 Main"))
+        self.assertEqual({s["latest"]["telegram"] for s in app.pnl_state.values()}, {"sent"})
+
+    def test_account_without_positions_is_left_out_of_the_combined_message(self):
+        self.live[0].update(pnl_enabled=True, pnl_interval_minutes=5)
+        self.live.append({**json.loads(json.dumps(CONFIG)), "id": "acc2", "name": "Suraj",
+                          "pnl_enabled": True, "pnl_interval_minutes": 5})
+        reports = {"acc1": ("pnl", "update", SUMMARY), "acc2": ("none", "No open positions", None)}
+        with mock.patch.object(app, "pnl_report", side_effect=lambda account, now: reports[account["id"]]), \
+                mock.patch.object(app, "notify_telegram", return_value="sent") as notify:
+            app.pnl_tick(NOW)
+        notify.assert_called_once_with("pnl", SINGLE_UPDATE)
 
     def test_no_message_without_open_positions(self):
         _, notify, log = self.tick(NOW, ("none", "No open positions"))
@@ -600,13 +675,17 @@ class PnlSchedule(unittest.TestCase):
         _, notify, _ = self.tick(later(15), failure)
         notify.assert_called_once()
 
-    def test_each_account_has_its_own_interval_and_latest_update(self):
+    def test_each_account_keeps_its_own_interval(self):
         second = {**CONFIG, "id": "acc2", "name": "Second", "pnl_enabled": True, "pnl_interval_minutes": 1}
         self.live.append(json.loads(json.dumps(second)))
         _, notify, _ = self.tick(NOW, ("pnl", "update"))
-        self.assertEqual(sorted(call.args[2]["name"] for call in notify.call_args_list), ["Main", "Second"])
+        notify.assert_called_once()
+        self.assertIn("🟢 Second : ", notify.call_args.args[1])
+        self.assertIn("🟢 Main : ", notify.call_args.args[1])
         _, notify, _ = self.tick(NOW + timedelta(minutes=1), ("pnl", "update"))
-        self.assertEqual([call.args[2]["name"] for call in notify.call_args_list], ["Second"])
+        notify.assert_called_once()
+        self.assertIn("🟢 Second : ", notify.call_args.args[1])
+        self.assertNotIn("Main", notify.call_args.args[1])
         self.assertEqual(set(app.pnl_state), {"acc1", "acc2"})
 
     def test_removed_account_state_is_dropped(self):

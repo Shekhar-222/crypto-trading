@@ -119,8 +119,9 @@ def _leg_dot(value):
     return "🟢 " if amount > 0 else "🔴 "
 
 
-def format_positions(positions, inr_rate, ltps, stops):
-    """ltps and stops are looked up by symbol, with None where Delta couldn't supply them."""
+def account_summary(positions, inr_rate, ltps, stops):
+    """(total USD, total INR, position lines) for one account.
+    ltps and stops are looked up by symbol, with None where Delta couldn't supply them."""
     total_usd = 0.0
     details = []
     for position in positions:
@@ -134,6 +135,36 @@ def format_positions(positions, inr_rate, ltps, stops):
             f" | LTP {fmt(_number(ltps.get(symbol)))} | SL {format_stops(stops.get(symbol))}"
             f" | PnL {rupees(unrealized)}",
         ]
-    total_inr = total_usd * inr_rate
-    total = _with_hearts(f"Total PnL: {rupees(total_inr)} ({dollars(total_usd)})", total_inr)
-    return "\n".join([f"{TITLE_PADDING}📊 PNL UPDATE📊", "", total, *details])
+    return total_usd, total_usd * inr_rate, details
+
+
+def _total_line(total_usd, total_inr):
+    return _with_hearts(f"Total PnL: {rupees(total_inr)} ({dollars(total_usd)})", total_inr)
+
+
+def format_positions(positions, inr_rate, ltps, stops):
+    total_usd, total_inr, details = account_summary(positions, inr_rate, ltps, stops)
+    return "\n".join([f"{TITLE_PADDING}📊 PNL UPDATE📊", "", _total_line(total_usd, total_inr), *details])
+
+
+# Telegram refuses messages over 4,096 characters, so long updates are split between accounts.
+MESSAGE_LIMIT = 3800
+DIVIDER = "=" * 25
+NAME_PADDING = "⠀" * 6
+
+
+def format_combined(reports):
+    """The Telegram update: one PnL line per account, then each account's positions.
+    reports are (name, total USD, total INR, position lines). Returns the messages to send."""
+    lines = [f"{_leg_dot(inr)}{name} : {rupees(inr)}  ({dollars(usd)})" for name, usd, inr, _ in reports]
+    sections = ["\n".join([f"{NAME_PADDING}👤 {name}", *details]) for name, _, _, details in reports]
+    messages = ["\n\n".join([f"{TITLE_PADDING}📊 PNL UPDATE📊", *lines])]
+    for section in sections:
+        block = f"\n\n{DIVIDER}\n\n{section}"
+        if len(messages[-1]) + len(block) + len(DIVIDER) + 2 > MESSAGE_LIMIT:
+            messages[-1] += f"\n\n{DIVIDER}"
+            messages.append(section)
+        else:
+            messages[-1] += block
+    messages[-1] += f"\n\n{DIVIDER}"
+    return messages
