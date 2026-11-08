@@ -43,10 +43,24 @@ def chain(strike_list, atm=17350, atm_call=90.0, atm_put=90.95):
 
 STRIKES = [17200, 17250, 17300, 17350, 17400, 17450, 17500]
 CONFIG = {
+    **app.DEFAULTS, "id": "acc1", "name": "Main", "api_key": "main-key-1234", "api_secret": "main-secret",
     "symbol": "BTC", "expiry": "021126", "multiplier": 0.5, "atm_reference": "spot",
-    "entry_time": "09:30", "enabled": True, "last_fired": "",
+    "entry_time": "09:30", "enabled": True, "last_fired": "", "pending_stops": [],
 }
 NOW = datetime(2026, 11, 1, 9, 30, 5, tzinfo=app.IST)
+
+
+def accounts_in_settings(test, *accounts):
+    """Put fresh copies of these accounts in the app's settings for one test, and return them."""
+    live = [json.loads(json.dumps(account)) for account in accounts]
+    patcher = mock.patch.dict(app.settings, {"accounts": live})
+    patcher.start()
+    test.addCleanup(patcher.stop)
+    return live
+
+
+def run_inline(target, *args):
+    target(*args)
 
 
 class SelectStrikes(unittest.TestCase):
@@ -211,14 +225,23 @@ class TelegramFormat(unittest.TestCase):
 
 class Pinning(unittest.TestCase):
     def run_notify(self, send=("sent", 8), pin=None, unpin=None, previous=5, kind="signal"):
-        with mock.patch.dict(app.settings, {"pinned_message_id": previous}), \
-                mock.patch.object(app, "save_settings") as save, \
+        other = {**CONFIG, "id": "acc2", "name": "Second", "pinned_message_id": 99}
+        live, live_other = accounts_in_settings(self, {**CONFIG, "pinned_message_id": previous}, other)
+        with mock.patch.object(app, "save_settings") as save, \
                 mock.patch.object(app.telegram_client, "is_enabled", return_value=True), \
                 mock.patch.object(app.telegram_client, "send", return_value=send), \
                 mock.patch.object(app.telegram_client, "pin", return_value=pin) as pin_call, \
                 mock.patch.object(app.telegram_client, "unpin", return_value=unpin) as unpin_call:
-            status = app.notify_telegram(kind, "message")
-            return status, pin_call, unpin_call, app.settings["pinned_message_id"], save
+            status = app.notify_telegram(kind, "message", CONFIG)
+        self.assertEqual(live_other["pinned_message_id"], 99)  # Each account keeps its own pin.
+        return status, pin_call, unpin_call, live["pinned_message_id"], save
+
+    def test_message_is_labelled_with_the_account(self):
+        accounts_in_settings(self, CONFIG)
+        with mock.patch.object(app.telegram_client, "is_enabled", return_value=True), \
+                mock.patch.object(app.telegram_client, "send", return_value=("sent", 8)) as send:
+            app.notify_telegram("pnl", "update", CONFIG)
+        self.assertEqual(send.call_args.args[0], "👤 Main\nupdate")
 
     def test_pins_new_signal_then_unpins_previous(self):
         status, pin, unpin, stored, save = self.run_notify()
@@ -298,7 +321,7 @@ class PnlMessages(unittest.TestCase):
     def check(self, positions, wallets=USD_WALLET):
         with mock.patch.object(app.delta_client, "get_positions", return_value=positions), \
                 mock.patch.object(app.delta_client, "get_wallets", return_value=wallets):
-            return app.check_pnl(NOW)
+            return app.check_pnl(CONFIG, NOW)
 
     def test_shows_average_entry_ltp_and_stoploss_without_mark(self):
         _, message = self.check([POSITION])
@@ -478,7 +501,7 @@ class AccountPanel(unittest.TestCase):
         position_mock = {"side_effect": positions} if isinstance(positions, Exception) else {"return_value": positions or []}
         with mock.patch.object(app.delta_client, "get_wallets", **wallet_mock), \
                 mock.patch.object(app.delta_client, "get_positions", **position_mock):
-            return app.account_snapshot(NOW)
+            return app.account_snapshot(CONFIG, NOW)
 
     def test_shows_only_funded_wallets(self):
         self.assertEqual(self.snapshot()["funds"], [{
@@ -531,23 +554,25 @@ class AccountPanel(unittest.TestCase):
 
 class PnlSchedule(unittest.TestCase):
     def tick(self, now, check, **config):
-        with mock.patch.dict(app.settings, {"pnl_enabled": True, "pnl_interval_minutes": 5, **config}), \
-                mock.patch.object(app, "check_pnl", return_value=check) as check_call, \
+        self.live[0].update({"pnl_enabled": True, "pnl_interval_minutes": 5, **config})
+        with mock.patch.object(app, "check_pnl", return_value=check) as check_call, \
                 mock.patch.object(app, "add_log") as log, \
                 mock.patch.object(app, "notify_telegram", return_value="sent") as notify:
             app.pnl_tick(now)
         return check_call, notify, log
 
     def setUp(self):
-        patcher = mock.patch.dict(app.pnl_state, {"latest": None, "last_check": None, "failing": False})
+        patcher = mock.patch.dict(app.pnl_state, clear=True)
         patcher.start()
         self.addCleanup(patcher.stop)
+        self.live = accounts_in_settings(self, CONFIG)
 
     def test_sends_then_waits_for_the_interval(self):
         signal = ("pnl", "update")
         check, notify, _ = self.tick(NOW, signal)
         check.assert_called_once()
-        notify.assert_called_once_with("pnl", "update")
+        notify.assert_called_once_with("pnl", "update", mock.ANY)
+        self.assertEqual(notify.call_args.args[2]["name"], "Main")
         check, notify, _ = self.tick(NOW + timedelta(minutes=4, seconds=59), signal)
         check.assert_not_called()
         check, notify, _ = self.tick(NOW + timedelta(minutes=5), signal)
@@ -574,6 +599,21 @@ class PnlSchedule(unittest.TestCase):
         self.tick(later(10), ("pnl", "update"))
         _, notify, _ = self.tick(later(15), failure)
         notify.assert_called_once()
+
+    def test_each_account_has_its_own_interval_and_latest_update(self):
+        second = {**CONFIG, "id": "acc2", "name": "Second", "pnl_enabled": True, "pnl_interval_minutes": 1}
+        self.live.append(json.loads(json.dumps(second)))
+        _, notify, _ = self.tick(NOW, ("pnl", "update"))
+        self.assertEqual(sorted(call.args[2]["name"] for call in notify.call_args_list), ["Main", "Second"])
+        _, notify, _ = self.tick(NOW + timedelta(minutes=1), ("pnl", "update"))
+        self.assertEqual([call.args[2]["name"] for call in notify.call_args_list], ["Second"])
+        self.assertEqual(set(app.pnl_state), {"acc1", "acc2"})
+
+    def test_removed_account_state_is_dropped(self):
+        self.tick(NOW, ("pnl", "update"))
+        self.live.clear()
+        app.pnl_tick(NOW + timedelta(minutes=5))
+        self.assertEqual(app.pnl_state, {})
 
     def test_pnl_message_is_silent(self):
         with mock.patch.object(app.telegram_client, "is_enabled", return_value=True), \
@@ -750,17 +790,45 @@ class Trading(unittest.TestCase):
         self.assertIn("TRADING ERROR", entry["message"])
 
     def test_scheduler_trades_but_only_once(self):
-        with mock.patch.dict(app.settings, LIVE), mock.patch.object(app, "save_settings"):
+        accounts_in_settings(self, LIVE)
+        with mock.patch.object(app, "save_settings"), mock.patch.object(app, "run_in_background", run_inline):
             app.scheduler_tick(NOW)
             app.scheduler_tick(NOW)
         self.assertEqual(self.place.call_count, 2)
+
+    def test_each_account_orders_with_its_own_keys_and_size(self):
+        second = {**LIVE, "id": "acc2", "name": "Second", "api_key": "second-key-99",
+                  "api_secret": "second-secret", "trade_size": 7}
+        accounts_in_settings(self, LIVE, second)
+        used = []
+
+        def place(order):
+            used.append((app.delta_client._credentials.get()[0], order["size"]))
+            return {"id": 11, "state": "open", "bracket_stop_loss_price": "206"}
+
+        self.place.side_effect = place
+        with mock.patch.object(app, "save_settings"), mock.patch.object(app, "run_in_background", run_inline):
+            app.scheduler_tick(NOW)
+        self.assertEqual(sorted(used), [("main-key-1234", 3), ("main-key-1234", 3),
+                                        ("second-key-99", 7), ("second-key-99", 7)])
+        self.assertEqual(sorted(entry["account"] for entry in app.logs), ["Main", "Second"])
+        self.assertIsNone(app.delta_client._credentials.get())
+
+    def test_accounts_fire_at_their_own_times(self):
+        later = {**LIVE, "id": "acc2", "name": "Second", "entry_time": "10:15"}
+        accounts_in_settings(self, LIVE, later)
+        with mock.patch.object(app, "save_settings"), \
+                mock.patch.object(app, "run_in_background") as background:
+            app.scheduler_tick(NOW)
+            app.scheduler_tick(NOW.replace(hour=10, minute=15))
+            app.scheduler_tick(NOW.replace(hour=10, minute=15, second=30))
+        self.assertEqual([call.args[1]["name"] for call in background.call_args_list], ["Main", "Second"])
 
     def test_signed_post_signs_the_exact_body(self):
         response = mock.MagicMock()
         response.__enter__.return_value = io.BytesIO(b'{"result": {"id": 1}}')
         order = {"size": 1, "side": "sell"}
-        env = {"DELTA_API_KEY": "k", "DELTA_API_SECRET": "s"}
-        with mock.patch.dict(app.os.environ, env), \
+        with app.delta_client.using("k", "s"), \
                 mock.patch.object(app.delta_client.time, "time", return_value=1700000000), \
                 mock.patch.object(app.delta_client.urllib.request, "urlopen", return_value=response) as urlopen:
             self.assertEqual(ORIGINAL_PLACE_ORDER(order), {"id": 1})
@@ -787,10 +855,10 @@ class AddingToHeldStrike(unittest.TestCase):
     def setUp(self):
         folder = tempfile.TemporaryDirectory()
         self.addCleanup(folder.cleanup)
+        self.account = accounts_in_settings(self, LIVE)[0]
         for patcher in (
             mock.patch.object(app, "LOG_FILE", Path(folder.name) / "logs.jsonl"),
             mock.patch.object(app, "save_settings"),
-            mock.patch.dict(app.settings, {"pending_stops": []}),
             mock.patch.object(app.delta_client, "get_option_tickers", return_value=tradable_chain()),
             mock.patch.object(app.delta_client, "get_best_quotes", return_value=(Decimal("103"), Decimal("104"))),
             mock.patch.object(app.delta_client, "get_positions", return_value=[HELD_PUT]),
@@ -813,7 +881,7 @@ class AddingToHeldStrike(unittest.TestCase):
         orders = self.orders_by_symbol()
         self.assertFalse([key for key in orders["P-BTC-17250-021126"] if key.startswith("bracket")])
         self.assertEqual(orders["C-BTC-17450-021126"]["bracket_stop_loss_price"], "206")
-        watched = app.settings["pending_stops"]
+        watched = self.account["pending_stops"]
         self.assertEqual([item["symbol"] for item in watched], ["P-BTC-17250-021126"])
         self.assertIn("separate SL after each fill", entry["message"])
         self.assertNotIn("NO STOPLOSS CONFIRMED", entry["message"])
@@ -822,7 +890,7 @@ class AddingToHeldStrike(unittest.TestCase):
         long_position = {**HELD_PUT, "size": 1}
         with mock.patch.object(app.delta_client, "get_positions", return_value=[long_position]):
             app.send_alert(LIVE, NOW, "scheduled", trade=True)
-        self.assertEqual(app.settings["pending_stops"], [])
+        self.assertEqual(self.account["pending_stops"], [])
         self.assertIn("bracket_stop_loss_price", self.orders_by_symbol()["P-BTC-17250-021126"])
 
     def test_unknown_positions_skip_the_trade(self):
@@ -835,7 +903,7 @@ class AddingToHeldStrike(unittest.TestCase):
         self.place.side_effect = [{"id": 1, "state": "open", "bracket_stop_loss_price": "2"}, DeltaError("No clear reply.")]
         entry = app.send_alert(LIVE, NOW, "scheduled", trade=True)
         self.assertIn("NO STOPLOSS", entry["message"])
-        self.assertEqual(app.settings["pending_stops"], [])
+        self.assertEqual(self.account["pending_stops"], [])
 
     def test_rejected_entry_is_not_watched_and_has_no_holding_note(self):
         self.place.side_effect = DeltaRejected("Delta rejected the request.")
@@ -843,7 +911,7 @@ class AddingToHeldStrike(unittest.TestCase):
                    if not (t["contract_type"] == "call_options" and float(t["strike_price"]) > 17400)]
         with mock.patch.object(app.delta_client, "get_option_tickers", return_value=tickers):
             entry = app.send_alert(LIVE, NOW, "scheduled", trade=True)
-        self.assertEqual(app.settings["pending_stops"], [])
+        self.assertEqual(self.account["pending_stops"], [])
         self.assertIn("CALL NOT TRADED", entry["message"])
         self.assertNotIn("holds only", entry["message"])
 
@@ -1079,21 +1147,36 @@ class StopsTick(unittest.TestCase):
         self.addCleanup(app.logs.clear)
 
     def test_finished_order_is_removed_and_logged_once(self):
-        with mock.patch.dict(app.settings, {"pending_stops": [dict(WATCHED)]}), \
-                mock.patch.object(app.delta_client, "get_order", return_value=live_order()):
+        account, = accounts_in_settings(self, {**CONFIG, "pending_stops": [dict(WATCHED)]})
+        with mock.patch.object(app.delta_client, "get_order", return_value=live_order()):
             app.stops_tick(NOW)
-            self.assertEqual(app.settings["pending_stops"], [])
+            self.assertEqual(account["pending_stops"], [])
             app.stops_tick(NOW + timedelta(seconds=1))
         self.assertEqual(len(app.logs), 1)
         self.assertEqual(app.logs[0]["source"], "stoploss")
+        self.assertEqual(app.logs[0]["account"], "Main")
 
     def test_open_order_keeps_being_watched(self):
-        with mock.patch.dict(app.settings, {"pending_stops": [dict(WATCHED)]}), \
-                mock.patch.object(app.delta_client, "get_order",
-                                  return_value=live_order(unfilled=5, state="open", average=None)):
+        account, = accounts_in_settings(self, {**CONFIG, "pending_stops": [dict(WATCHED)]})
+        with mock.patch.object(app.delta_client, "get_order",
+                               return_value=live_order(unfilled=5, state="open", average=None)):
             app.stops_tick(NOW)
-            self.assertEqual(len(app.settings["pending_stops"]), 1)
+            self.assertEqual(len(account["pending_stops"]), 1)
         self.assertEqual(len(app.logs), 0)
+
+    def test_each_account_watches_with_its_own_keys(self):
+        second = {**CONFIG, "id": "acc2", "name": "Second", "api_key": "second-key-99",
+                  "pending_stops": [{**WATCHED, "order_id": 78}]}
+        accounts_in_settings(self, {**CONFIG, "pending_stops": [dict(WATCHED)]}, second)
+        keys = {}
+
+        def get_order(order_id):
+            keys[order_id] = app.delta_client._credentials.get()[0]
+            return live_order(unfilled=5, state="open", average=None)
+
+        with mock.patch.object(app.delta_client, "get_order", side_effect=get_order):
+            app.stops_tick(NOW)
+        self.assertEqual(keys, {77: "main-key-1234", 78: "second-key-99"})
 
 
 class TradeValidation(unittest.TestCase):
@@ -1112,12 +1195,10 @@ class TradeValidation(unittest.TestCase):
 
 
 class SignedRequests(unittest.TestCase):
-    ENV = {"DELTA_API_KEY": "my-key", "DELTA_API_SECRET": "my-secret"}
-
     def test_signature_follows_delta_format(self):
         response = mock.MagicMock()
         response.__enter__.return_value = io.BytesIO(b'{"result": []}')
-        with mock.patch.dict(app.os.environ, self.ENV), \
+        with app.delta_client.using("my-key", "my-secret"), \
                 mock.patch.object(app.delta_client.time, "time", return_value=1700000000.9), \
                 mock.patch.object(app.delta_client.urllib.request, "urlopen", return_value=response) as urlopen:
             self.assertEqual(app.delta_client.get_positions(), [])
@@ -1129,13 +1210,23 @@ class SignedRequests(unittest.TestCase):
         self.assertTrue(request.get_header("User-agent"))
 
     def test_missing_keys_raise_a_clear_error(self):
-        with mock.patch.dict(app.os.environ, clear=True), self.assertRaisesRegex(DeltaError, "DELTA_API_KEY"):
+        env = {"DELTA_API_KEY": "env-key", "DELTA_API_SECRET": "env-secret"}
+        with mock.patch.dict(app.os.environ, env), self.assertRaisesRegex(DeltaError, "no Delta API key"):
+            app.delta_client.get_positions()  # .env keys are never used without an account.
+        with app.delta_client.using("", ""), self.assertRaisesRegex(DeltaError, "no Delta API key"):
             app.delta_client.get_positions()
+
+    def test_keys_apply_only_inside_the_block(self):
+        with app.delta_client.using("a", "b"):
+            with app.delta_client.using("c", "d"):
+                self.assertEqual(app.delta_client._credentials.get(), ("c", "d"))
+            self.assertEqual(app.delta_client._credentials.get(), ("a", "b"))
+        self.assertIsNone(app.delta_client._credentials.get())
 
     def test_rejection_reports_code_without_secrets(self):
         body = io.BytesIO(b'{"error": {"code": "UnauthorizedApiAccess"}}')
         rejected = urllib.error.HTTPError("https://x", 403, "Forbidden", {}, body)
-        with mock.patch.dict(app.os.environ, self.ENV), \
+        with app.delta_client.using("my-key", "my-secret"), \
                 mock.patch.object(app.delta_client.urllib.request, "urlopen", side_effect=rejected), \
                 self.assertRaises(DeltaError) as caught:
             app.delta_client.get_positions()
@@ -1157,12 +1248,147 @@ class Schedule(unittest.TestCase):
         self.assertTrue(app.is_due(fired, NOW.replace(day=2)))
 
     def test_tick_sends_a_single_alert(self):
-        with mock.patch.dict(app.settings, CONFIG), \
-                mock.patch.object(app, "save_settings"), \
-                mock.patch.object(app, "send_alert") as send:
+        account, = accounts_in_settings(self, CONFIG)
+        with mock.patch.object(app, "save_settings"), \
+                mock.patch.object(app, "run_in_background") as background:
             app.scheduler_tick(NOW)
             app.scheduler_tick(NOW)
-        send.assert_called_once()
+        background.assert_called_once()
+        self.assertEqual(background.call_args.args[0], app.send_alert)
+        self.assertEqual(account["last_fired"], "2026-11-01 09:30")
+
+    def test_failed_entry_thread_is_logged(self):
+        with mock.patch.object(app, "report_error") as report:
+            app._guarded(mock.Mock(side_effect=RuntimeError("boom")), ())
+        self.assertEqual(report.call_args.args[0], "entry")
+
+
+class Accounts(unittest.TestCase):
+    OLD_SETTINGS = {
+        "symbol": "BTC", "expiry": "041126", "multiplier": 1.8, "atm_reference": "spot", "entry_time": "22:30",
+        "enabled": True, "last_fired": "2026-11-02 22:30", "pinned_message_id": 202, "pnl_enabled": True,
+        "pnl_interval_minutes": 1, "trading_enabled": True, "trade_size": 300, "logs_cleared_on": "2026-11-03",
+        "pending_stops": [{"order_id": 5}],
+    }
+
+    def setUp(self):
+        folder = tempfile.TemporaryDirectory()
+        self.addCleanup(folder.cleanup)
+        self.file = Path(folder.name) / "settings.json"
+        patcher = mock.patch.object(app, "SETTINGS_FILE", self.file)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        patcher = mock.patch.dict(app.settings, {"accounts": [], "logs_cleared_on": None})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        patcher = mock.patch.dict(app.os.environ, {"DELTA_API_KEY": "env-key-1234", "DELTA_API_SECRET": "env-secret"})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_old_settings_become_the_main_account_with_nothing_lost(self):
+        self.file.write_text(json.dumps(self.OLD_SETTINGS), encoding="utf-8")
+        app.load_settings()
+        account, = app.settings["accounts"]
+        self.assertEqual(account["name"], "Main")
+        self.assertEqual(account["api_key"], "env-key-1234")
+        self.assertEqual(account["api_secret"], "env-secret")
+        for key in app.DEFAULTS:
+            self.assertEqual(account[key], self.OLD_SETTINGS[key], key)
+        self.assertEqual(app.settings["logs_cleared_on"], "2026-11-03")
+        saved = json.loads(self.file.read_text(encoding="utf-8"))
+        self.assertEqual(saved["accounts"][0]["id"], account["id"])
+        self.assertNotIn("symbol", saved)
+
+    def test_migrated_account_does_not_fire_again_the_same_day(self):
+        self.file.write_text(json.dumps(self.OLD_SETTINGS), encoding="utf-8")
+        app.load_settings()
+        self.assertFalse(app.is_due(app.settings["accounts"][0], datetime(2026, 11, 2, 22, 30, 30, tzinfo=app.IST)))
+
+    def test_new_settings_load_as_they_are(self):
+        account = app.new_account("Second", "k" * 10, "s" * 10, entry_time="10:00")
+        self.file.write_text(json.dumps({"accounts": [account], "logs_cleared_on": None}), encoding="utf-8")
+        app.load_settings()
+        self.assertEqual(app.settings["accounts"], [account])
+
+    def test_no_keys_in_env_means_no_account_is_made_up(self):
+        self.file.write_text(json.dumps(self.OLD_SETTINGS), encoding="utf-8")
+        with mock.patch.dict(app.os.environ, {"DELTA_API_KEY": ""}):
+            app.load_settings()
+        self.assertEqual(app.settings["accounts"], [])
+
+    @unittest.skipIf(sys.platform == "win32", "Windows has no Unix file modes")
+    def test_settings_file_is_private(self):
+        app.save_settings()
+        self.assertEqual(self.file.stat().st_mode & 0o777, 0o600)
+
+    def add(self, **body):
+        body = {"name": "Second", "api_key": "second-key-99", "api_secret": "second-secret", **body}
+        with mock.patch.object(app.delta_client, "get_wallets", return_value=[]) as wallets:
+            return app.add_account(body), wallets
+
+    def test_add_checks_keys_and_starts_with_trading_off(self):
+        seen = []
+        with mock.patch.object(app.delta_client, "get_wallets",
+                               side_effect=lambda: seen.append(app.delta_client._credentials.get())):
+            shown = app.add_account({"name": " Second ", "api_key": "second-key-99", "api_secret": "second-secret"})
+        self.assertEqual(seen, [("second-key-99", "second-secret")])
+        account, = app.settings["accounts"]
+        self.assertEqual((account["name"], account["api_key"], account["api_secret"]),
+                         ("Second", "second-key-99", "second-secret"))
+        self.assertFalse(account["trading_enabled"] or account["enabled"] or account["pnl_enabled"])
+        self.assertNotIn("api_secret", shown)
+        self.assertNotIn("api_key", shown)
+        self.assertEqual(shown["api_key_hint"], "…y-99")
+        self.assertTrue(self.file.exists())
+
+    def test_rejected_keys_are_not_saved(self):
+        with mock.patch.object(app.delta_client, "get_wallets",
+                               side_effect=DeltaRejected("Delta rejected the request: HTTP 401, ip_not_whitelisted_for_api_key.")), \
+                self.assertRaisesRegex(ValueError, "ip_not_whitelisted"):
+            app.add_account({"name": "Second", "api_key": "second-key-99", "api_secret": "second-secret"})
+        self.assertEqual(app.settings["accounts"], [])
+
+    def test_bad_input_is_refused_before_calling_delta(self):
+        for body in ({"name": ""}, {"name": "x" * 31}, {"name": None}, {"api_key": "short"},
+                     {"api_key": "has space in it"}, {"api_secret": None}, {"api_secret": "é" * 10}):
+            with self.subTest(body=body), self.assertRaises(ValueError):
+                _, wallets = self.add(**body)
+                wallets.assert_not_called()
+
+    def test_duplicate_name_or_key_is_refused(self):
+        self.add()
+        for body in ({"name": "second", "api_key": "other-key-1"}, {"name": "Third"}):
+            with self.subTest(body=body), self.assertRaisesRegex(ValueError, "already"):
+                self.add(**body)
+        self.assertEqual(len(app.settings["accounts"]), 1)
+
+    def test_remove_keeps_other_accounts(self):
+        first, _ = self.add()
+        self.add(name="Third", api_key="third-key-123")
+        app.pnl_state[first["id"]] = {"latest": None}
+        self.addCleanup(app.pnl_state.pop, first["id"], None)
+        app.remove_account({"id": first["id"]})
+        self.assertEqual([a["name"] for a in app.settings["accounts"]], ["Third"])
+        self.assertNotIn(first["id"], app.pnl_state)
+
+    def test_remove_is_refused_while_stops_are_pending(self):
+        shown, _ = self.add()
+        app.settings["accounts"][0]["pending_stops"] = [{"order_id": 1}]
+        with self.assertRaisesRegex(ValueError, "waiting for their stoplosses"):
+            app.remove_account({"id": shown["id"]})
+        self.assertEqual(len(app.settings["accounts"]), 1)
+
+    def test_unknown_account_is_refused(self):
+        with self.assertRaisesRegex(ValueError, "no longer exists"):
+            app.remove_account({"id": "nope"})
+        with self.assertRaisesRegex(ValueError, "no longer exists"):
+            app.account_copy("nope")
+
+    def test_page_never_sees_secrets(self):
+        shown = app.public_account(CONFIG)
+        self.assertNotIn("api_secret", shown)
+        self.assertNotIn("main-secret", json.dumps(shown))
+        self.assertNotIn("main-key-1234", json.dumps(shown))
 
 
 class Validation(unittest.TestCase):

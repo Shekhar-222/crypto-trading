@@ -46,6 +46,7 @@
   .danger legend { color: #fca5a5; }
   .fields { display: grid; gap: 12px; }
   .fields.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  @media (max-width: 900px) { #add-form { grid-template-columns: minmax(0, 1fr); } }
   label { display: grid; gap: 5px; font-weight: 600; font-size: 13px; color: var(--muted); }
   select, input[type=number], input[type=time] {
     font: inherit; font-weight: 500; color: var(--ink); padding: 9px 10px; border: 1px solid var(--line);
@@ -93,7 +94,20 @@
   th { font-size: 13px; font-weight: 600; color: var(--muted); }
   .table-scroll { overflow-x: auto; }
   .section { margin-top: 18px; }
-  [hidden] { display: none; }
+  .account-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .chip { display: inline-flex; align-items: center; gap: 7px; }
+  .chip[aria-pressed="true"] { background: linear-gradient(90deg, #2563eb, #7c3aed); border-color: transparent; color: #fff; }
+  .chip .tag { font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 999px; background: #dc2626; color: #fff; }
+  .chip .tag.off { background: #ffffff1f; color: var(--muted); }
+  #add-form { margin-top: 14px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  input[type=text], input[type=password] {
+    font: inherit; font-weight: 500; color: var(--ink); padding: 9px 10px; border: 1px solid var(--line);
+    border-radius: 10px; width: 100%; background: #0b1224;
+  }
+  button.danger { border-color: #f8717166; color: #fca5a5; }
+  button.danger:hover:not(:disabled) { background: #f8717126; }
+  .spacer { flex: 1; }
+  [hidden] { display: none !important; }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } button:hover:not(:disabled) { transform: none; } }
   @media (max-width: 900px) {
     form { grid-template-columns: minmax(0, 1fr); }
@@ -117,7 +131,39 @@
   <div id="telegram-banner" class="banner" hidden>Telegram is turned on but isn't set up, so alerts will only show in the logs. Add your details to the .env file and restart.</div>
 
   <section class="panel">
-    <h2>💰 Account <span id="account-time" class="muted"></span></h2>
+    <h2>👥 Accounts <span class="muted">each runs the same strategy with its own settings</span></h2>
+    <div class="account-bar">
+      <div id="account-chips" class="account-bar"></div>
+      <button id="show-add" type="button">＋ Add account</button>
+    </div>
+    <form id="add-form" hidden autocomplete="off">
+      <label>Account name
+        <input id="new-name" type="text" maxlength="30" required>
+      </label>
+      <label>Delta API key
+        <input id="new-key" type="text" spellcheck="false" required>
+      </label>
+      <label>Delta API secret
+        <input id="new-secret" type="password" autocomplete="new-password" required>
+      </label>
+      <div class="buttons">
+        <button class="primary" type="submit">Check keys and add</button>
+        <button id="cancel-add" type="button">Cancel</button>
+      </div>
+      <div class="muted" style="grid-column: 1 / -1">
+        First add this server's IP <strong>65.2.227.93</strong> to the key's allowed IPs in Delta, with trading permission.
+        The app checks the keys with Delta before saving. A new account starts with alerts and live trading off.
+        Only add keys on mobile data or your home network, as this page isn't encrypted.
+      </div>
+    </form>
+    <div id="add-status" class="saved" role="status"></div>
+    <div id="add-error" class="banner" role="alert" hidden></div>
+    <div id="no-accounts" class="banner" hidden>No accounts yet. Add one to start.</div>
+  </section>
+
+  <div id="account-view">
+  <section class="panel">
+    <h2>💰 <span id="account-name">Account</span> <span id="account-time" class="muted"></span></h2>
     <div id="account-tiles" class="tiles"></div>
     <div id="account-error" class="banner" role="alert" hidden></div>
     <div class="table-scroll">
@@ -182,6 +228,8 @@
       <button class="primary" type="submit">Save settings</button>
       <button id="send-now" type="button">Run alert now</button>
       <button id="check-pnl" type="button">Check PnL</button>
+      <span class="spacer"></span>
+      <button id="remove-account" class="danger" type="button">Remove account</button>
     </div>
   </form>
   <div id="schedule" class="card"></div>
@@ -194,9 +242,10 @@
   </div>
 
   </section>
+  </div>
 
   <section class="panel">
-    <h2>📜 Logs <span class="muted">cleared daily at midnight IST</span></h2>
+    <h2>📜 Logs <span class="muted">all accounts, cleared daily at midnight IST</span></h2>
     <div id="logs"><div class="muted">No alerts logged yet.</div></div>
   </section>
 </div>
@@ -219,8 +268,16 @@ function showError(message) {
   el("error").hidden = !message;
 }
 
+let accounts = [];
+let selectedId = null;
+
+function selected() {
+  return accounts.find(account => account.id === selectedId) || null;
+}
+
 function formValues() {
   return {
+    id: selectedId,
     symbol: el("symbol").value,
     expiry: el("expiry").value,
     multiplier: el("multiplier").valueAsNumber,
@@ -342,13 +399,17 @@ function renderAccount(account) {
 let accountLoading = false;
 
 async function refreshAccount() {
-  if (accountLoading) return;
+  if (accountLoading || !selectedId) return;
   accountLoading = true;
+  const id = selectedId;
   try {
-    renderAccount(await api("/api/account"));
+    const data = await api(`/api/account?id=${encodeURIComponent(id)}`);
+    if (id === selectedId) renderAccount(data);
   } catch (error) {
-    el("account-error").textContent = "Can't load account data right now.";
-    el("account-error").hidden = false;
+    if (id === selectedId) {
+      el("account-error").textContent = "Can't load account data right now.";
+      el("account-error").hidden = false;
+    }
   } finally {
     accountLoading = false;
   }
@@ -357,7 +418,12 @@ async function refreshAccount() {
 let shownPnlTime = null;
 
 function renderPnl(result) {
-  if (!result || result.time === shownPnlTime) return;
+  if (!result) {
+    shownPnlTime = null;
+    el("pnl-section").hidden = true;
+    return;
+  }
+  if (result.time === shownPnlTime) return;
   shownPnlTime = result.time;
   el("pnl-meta").textContent = `${result.time} IST · Telegram: ${result.telegram}`;
   renderMessage(el("pnl-text"), result.message);
@@ -378,7 +444,7 @@ function renderLogs(logs) {
     card.className = "card" + (entry.kind === "warning" ? " warning" : "");
     const meta = document.createElement("div");
     meta.className = "muted";
-    meta.textContent = `${entry.time} IST · ${entry.source}`
+    meta.textContent = `${entry.time} IST · ${entry.account ? `👤 ${entry.account} · ` : ""}${entry.source}`
       + (entry.telegram === "off" ? "" : ` · Telegram: ${entry.telegram}`);
     const text = document.createElement("pre");
     renderMessage(text, entry.message);
@@ -387,17 +453,44 @@ function renderLogs(logs) {
   }));
 }
 
+function renderChips() {
+  el("account-chips").replaceChildren(...accounts.map(account => {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "chip";
+    chip.setAttribute("aria-pressed", String(account.id === selectedId));
+    const name = document.createElement("span");
+    name.textContent = account.name;
+    const tag = document.createElement("span");
+    tag.className = "tag" + (account.trading_enabled ? "" : " off");
+    tag.textContent = account.trading_enabled ? "LIVE" : account.enabled ? "ALERTS" : "OFF";
+    chip.append(name, tag);
+    chip.addEventListener("click", () => selectAccount(account.id));
+    return chip;
+  }));
+  el("no-accounts").hidden = accounts.length > 0;
+  el("account-view").hidden = !selected();
+  const live = accounts.filter(account => account.trading_enabled).length;
+  el("trading-mode").textContent = live
+    ? `⚡ LIVE TRADING ON: ${live} of ${accounts.length} account${accounts.length === 1 ? "" : "s"}`
+    : "⏸️ Live trading OFF: alerts only";
+  el("trading-mode").className = "pill" + (live ? " live" : "");
+}
+
 async function refresh() {
   try {
     const state = await api("/api/state");
+    accounts = state.accounts;
+    if (!selected()) selectedId = accounts.length ? accounts[0].id : null;
     el("clock").textContent = state.now;
     el("telegram-banner").hidden = !state.telegram_enabled || state.telegram_configured;
     renderLogs(state.logs);
-    renderPnl(state.pnl);
-    const {enabled, entry_time, symbol, pnl_enabled, pnl_interval_minutes, trading_enabled, trade_size, pending_stops} = state.settings;
-    el("trading-mode").textContent = trading_enabled
-      ? `⚡ LIVE TRADING ON, ${trade_size} per side` : "⏸️ Live trading OFF: alerts only";
-    el("trading-mode").className = "pill" + (trading_enabled ? " live" : "");
+    renderChips();
+    const account = selected();
+    if (!account) return state;
+    renderPnl(state.pnl[account.id]);
+    const {enabled, entry_time, symbol, pnl_enabled, pnl_interval_minutes, trading_enabled, trade_size, pending_stops} = account;
+    el("account-name").textContent = `${account.name} ${account.api_key_hint ? `(key ${account.api_key_hint})` : ""}`;
     el("schedule").textContent = (enabled
       ? `Saved schedule: ON. ${symbol} alert runs daily at ${entry_time} IST.`
       : "Saved schedule: OFF. No alert will run at the entry time. Tick the daily box and save to turn it on.")
@@ -443,13 +536,11 @@ el("send-now").addEventListener("click", event => action(event.currentTarget, as
 }));
 
 el("check-pnl").addEventListener("click", event => action(event.currentTarget, async () => {
-  renderPnl(await api("/api/pnl"));
+  shownPnlTime = null;
+  renderPnl(await api(`/api/pnl?id=${encodeURIComponent(selectedId)}`));
 }));
 
-(async () => {
-  const state = await refresh();
-  if (!state) return;
-  const saved = state.settings;
+function fillForm(saved) {
   el("symbol").value = saved.symbol;
   el("multiplier").value = saved.multiplier;
   el("atm_reference").value = saved.atm_reference;
@@ -459,9 +550,100 @@ el("check-pnl").addEventListener("click", event => action(event.currentTarget, a
   el("pnl_interval_minutes").value = saved.pnl_interval_minutes;
   el("trading_enabled").checked = saved.trading_enabled;
   el("trade_size").value = saved.trade_size;
+}
+
+function remember(id) {
+  try { localStorage.setItem("account", id); } catch (error) { /* Only a convenience. */ }
+}
+
+function remembered() {
+  try { return localStorage.getItem("account"); } catch (error) { return null; }
+}
+
+async function selectAccount(id) {
+  selectedId = id;
+  remember(id);
+  showError("");
+  el("status").textContent = "";
+  el("account-tiles").replaceChildren();
+  el("positions-table").hidden = true;
+  el("account-error").hidden = true;
+  el("account-time").textContent = "loading…";
+  shownPnlTime = null;
+  await refresh();
+  const account = selected();
+  if (!account) return;
+  fillForm(account);
   refreshAccount();
+  await loadExpiries(account.expiry);
+}
+
+function showAddError(message) {
+  el("add-error").textContent = message;
+  el("add-error").hidden = !message;
+}
+
+el("show-add").addEventListener("click", () => {
+  el("add-form").hidden = false;
+  el("add-status").textContent = "";
+  showAddError("");
+  el("new-name").focus();
+});
+
+el("cancel-add").addEventListener("click", () => {
+  el("add-form").reset();
+  el("add-form").hidden = true;
+  showAddError("");
+});
+
+el("add-form").addEventListener("submit", event => {
+  event.preventDefault();
+  const button = event.submitter;
+  showAddError("");
+  el("add-status").textContent = "Checking the keys with Delta…";
+  button.disabled = true;
+  (async () => {
+    try {
+      const added = await api("/api/accounts/add", {
+        name: el("new-name").value, api_key: el("new-key").value, api_secret: el("new-secret").value,
+      });
+      el("add-form").reset();
+      el("add-form").hidden = true;
+      el("add-status").textContent = `Added ${added.name}. Alerts and live trading are off until you turn them on and save.`;
+      await selectAccount(added.id);
+    } catch (error) {
+      el("add-status").textContent = "";
+      showAddError(error.message);
+    } finally {
+      button.disabled = false;
+    }
+  })();
+});
+
+el("remove-account").addEventListener("click", event => {
+  const account = selected();
+  if (!account) return;
+  const ok = window.confirm(
+    `Remove ${account.name}? The app stops trading and sending alerts for it, and deletes its saved keys. `
+    + "Its open positions and stoplosses on Delta stay as they are."
+  );
+  if (!ok) return;
+  action(event.currentTarget, async () => {
+    await api("/api/accounts/remove", {id: account.id});
+    el("add-status").textContent = `Removed ${account.name}.`;
+    selectedId = null;
+    await refresh();
+    if (selectedId) await selectAccount(selectedId);
+  });
+});
+
+(async () => {
+  const state = await refresh();
+  if (!state) return;
+  const saved = remembered();
+  if (saved && state.accounts.some(account => account.id === saved)) selectedId = saved;
+  if (selectedId) await selectAccount(selectedId);
   setInterval(refreshAccount, 5000);
-  await loadExpiries(saved.expiry);
   setInterval(refresh, 5000);
 })();
 </script>

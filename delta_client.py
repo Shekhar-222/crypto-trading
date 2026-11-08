@@ -1,17 +1,20 @@
-"""Market data from Delta Exchange India, plus signed reads of the user's own positions."""
+"""Market data from Delta Exchange India, plus signed requests for the user's accounts."""
+import contextvars
 import hashlib
 import hmac
 import json
-import os
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from contextlib import contextmanager
 from datetime import datetime
 from decimal import Decimal
 
 BASE_URL = "https://api.india.delta.exchange"
 ATTEMPTS = 3
+# The account whose keys sign requests. Each thread sets its own, so accounts can't mix.
+_credentials = contextvars.ContextVar("delta_credentials", default=None)
 
 
 class DeltaError(Exception):
@@ -50,12 +53,21 @@ def _error_code(error):
     return detail.get("code", "no details") if isinstance(detail, dict) else str(detail)
 
 
+@contextmanager
+def using(api_key, api_secret):
+    """Sign every request inside this block with one account's keys."""
+    token = _credentials.set((api_key, api_secret))
+    try:
+        yield
+    finally:
+        _credentials.reset(token)
+
+
 def _signed_request(method, path, body=None):
     """Make one signed request. It is never retried, so an order can't be placed twice."""
-    key = os.environ.get("DELTA_API_KEY")
-    secret = os.environ.get("DELTA_API_SECRET")
+    key, secret = _credentials.get() or (None, None)
     if not key or not secret:
-        raise DeltaError("Add DELTA_API_KEY and DELTA_API_SECRET to .env, then restart the app.")
+        raise DeltaError("This account has no Delta API key and secret.")
     payload = json.dumps(body) if body is not None else ""
     timestamp = str(int(time.time()))
     signature = hmac.new(secret.encode(), f"{method}{timestamp}{path}{payload}".encode(), hashlib.sha256).hexdigest()

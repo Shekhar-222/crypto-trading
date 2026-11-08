@@ -3,3 +3,5 @@ settings.json
 logs.jsonl
 __pycache__/
 *.pem
+dashboard-link.txt
+settings.*.json
