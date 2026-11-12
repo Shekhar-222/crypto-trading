@@ -71,10 +71,11 @@ def build_order(leg, limit_price, size, client_order_id, separate_stop=False):
     return order
 
 
-def plan_orders(result, size, tag):
+def plan_orders(result, size, tag, stoploss=True):
     """Return ([(name, leg, order, price label, separate stop)], notes), or raise SkipTrade before anything is placed.
 
     An adjusted strike drops only that side, so the other side can still trade on its own.
+    Without stoploss, no order carries a bracket.
     """
     legs = (("CALL", result["call"]), ("PUT", result["put"]))
     tradable = [(name, leg) for name, leg in legs if not leg["adjusted"]]
@@ -99,14 +100,16 @@ def plan_orders(result, size, tag):
             side = "bids" if best_bid is None else "asks"
             raise SkipTrade(f"{leg['symbol']} has no {side} in the order book, so its spread is unknown.")
         price, label = choose_limit(best_bid, best_ask, Decimal(str(leg["tick_size"])))
-        separate = leg["symbol"] in held_short
+        separate = not stoploss or leg["symbol"] in held_short
         order = build_order(leg, price, size, f"{tag}{name[0]}", separate_stop=separate)
         plan.append((name, leg, order, label, separate))
     return plan, notes
 
 
-def _describe(name, leg, order, label, separate):
+def _describe(name, leg, order, label, separate, stoploss=True):
     entry = f"SELL {name} {fmt(leg['strike'])}: limit {order['limit_price']} ({label}), size {order['size']}"
+    if not stoploss:
+        return f"{entry}\nNo stoploss: this strategy exits at its overall target."
     if separate:
         return f"{entry}\nAdding to a held strike: the app places a separate SL after each fill."
     return (
@@ -130,10 +133,14 @@ def _watch_item(name, leg, order, response):
     }
 
 
-def place_trade(result, size, tag):
-    """Place both sides and return (message section, orders to watch). A failed POST is never retried."""
+def place_trade(result, size, tag, stoploss=True):
+    """Place both sides and return (message section, orders to watch). A failed POST is never retried.
+
+    Without stoploss, every order is still watched, with no_stop set: it gets no stop of its own,
+    but a bracket another strategy holds on the same contract is split so it stops covering these lots.
+    """
     try:
-        plan, notes = plan_orders(result, size, tag)
+        plan, notes = plan_orders(result, size, tag, stoploss)
     except (SkipTrade, DeltaError) as reason:
         return f"⚠️ TRADE SKIPPED: {reason} No orders were placed.", []
 
@@ -147,15 +154,26 @@ def place_trade(result, size, tag):
             sections.append(f"⚠️ SELL {name} {fmt(leg['strike'])} NOT PLACED: {error}")
             continue
         except DeltaError as error:
+            if not stoploss:
+                warning = " If it did, the app isn't watching it for the target, so close it by hand."
+            elif separate:
+                warning = " If it did, it has NO STOPLOSS, so set one by hand."
+            else:
+                warning = ""
             sections.append(
                 f"⚠️ SELL {name} {fmt(leg['strike'])} UNKNOWN: {error} "
-                "It may have gone through, so check your Delta orders."
-                + (" If it did, it has NO STOPLOSS, so set one by hand." if separate else "")
+                "It may have gone through, so check your Delta orders." + warning
             )
             continue
         placed += 1
-        text = f"{_describe(name, leg, order, label, separate)}\nOrder {response.get('id')}, {response.get('state')}"
-        if separate and response.get("id"):
+        text = f"{_describe(name, leg, order, label, separate, stoploss)}\nOrder {response.get('id')}, {response.get('state')}"
+        if not stoploss:
+            if response.get("id"):
+                watch.append({**_watch_item(name, leg, order, response), "no_stop": True,
+                              "name": name, "strike": leg["strike"]})
+            else:
+                text += "\n⚠️ NOT WATCHED: Delta gave no order id, so the app can't exit this leg at the target."
+        elif separate and response.get("id"):
             watch.append(_watch_item(name, leg, order, response))
         elif separate:
             text += "\n⚠️ NO STOPLOSS: Delta gave no order id to watch, so set one by hand now."
@@ -274,7 +292,9 @@ def watch_order(item, now, other_order_ids=()):
 
     messages = []
     new_size = filled - item["protected"]
-    if new_size > 0:
+    if new_size > 0 and item.get("no_stop"):
+        item["protected"] = filled  # This strategy has no stoploss; only the bracket split below applies.
+    elif new_size > 0:
         client_order_id = f"SL{item['order_id']}F{filled}"
         stop_order = _stop_order(item, fill_price, new_size, client_order_id)
         try:

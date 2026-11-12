@@ -95,12 +95,18 @@ def format_signal(result, settings, expiry_label, time_label):
         f" = {fmt(result['straddle'])}",
         f"Offset: {fmt(result['straddle'])} x {fmt(result['multiplier'])} = {fmt(result['offset'])}",
     ]
+    stoploss = settings.get("stoploss", True)
     for name, leg in (("CALL", result["call"]), ("PUT", result["put"])):
         lines += ["", f"SELL {name} {fmt(leg['strike'])} ({leg['symbol']}), LTP {fmt(leg['ltp'])}"]
         if leg["adjusted"]:
             lines.append(f"⚠️ Adjusted: calculated {name.lower()} strike was outside the listed range")
+        elif not stoploss:
+            continue
         elif leg["ltp"] is None:
             lines.append("Stoploss: n/a (no LTP)")
         else:
             lines.append(f"Stoploss: {fmt(leg['ltp'] * STOPLOSS_MULTIPLE)}")
+    if not stoploss:
+        lines += ["", f"🎯 Target: {fmt(settings['target_percent'])}% of premium, no stoploss. "
+                      "Held to expiry if the target isn't reached."]
     return "\n".join(lines)

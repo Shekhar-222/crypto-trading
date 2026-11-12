@@ -21,7 +21,7 @@
     background-attachment: fixed;
   }
   .page { margin: 0 auto; max-width: 1240px; padding: 28px 20px 40px; }
-  .hero { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 22px; }
+  .hero { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
   h1 { font-size: 30px; line-height: 1.2; font-weight: 700; margin: 0; letter-spacing: -.3px; }
   .title {
     background: linear-gradient(90deg, #93c5fd, #c4b5fd 60%, #f0abfc);
@@ -30,8 +30,16 @@
   .hero-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
   .pill { display: inline-block; padding: 5px 12px; border-radius: 999px; font-size: 13px; font-weight: 600; border: 1px solid var(--line); background: #ffffff0f; }
   .pill.live { color: #fff; background: linear-gradient(90deg, #dc2626, #ea580c); border-color: transparent; box-shadow: 0 0 18px #dc262680; }
+  nav { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; }
+  nav a {
+    color: var(--ink); text-decoration: none; font-weight: 600; padding: 9px 16px; border-radius: 10px;
+    border: 1px solid var(--line); background: #ffffff12;
+  }
+  nav a[aria-current="page"] { background: linear-gradient(90deg, #2563eb, #7c3aed); border-color: transparent; color: #fff; }
+  nav a:focus-visible, .strategy-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   h2 { font-size: 17px; font-weight: 650; margin: 0 0 12px; }
   h2 .muted { font-weight: 400; margin-left: 6px; }
+  h3 { font-size: 16px; font-weight: 650; margin: 0; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .panel {
     background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 18px;
     box-shadow: 0 12px 34px #00000059; backdrop-filter: blur(10px); margin-bottom: 18px;
@@ -46,9 +54,8 @@
   .danger legend { color: #fca5a5; }
   .fields { display: grid; gap: 12px; }
   .fields.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-  @media (max-width: 900px) { #add-form { grid-template-columns: minmax(0, 1fr); } }
   label { display: grid; gap: 5px; font-weight: 600; font-size: 13px; color: var(--muted); }
-  select, input[type=number], input[type=time] {
+  select, input[type=number], input[type=time], input[type=text], input[type=password] {
     font: inherit; font-weight: 500; color: var(--ink); padding: 9px 10px; border: 1px solid var(--line);
     border-radius: 10px; width: 100%; background: #0b1224; transition: border-color .15s, box-shadow .15s;
   }
@@ -56,7 +63,7 @@
   option { background: var(--panel-solid); }
   .toggle { display: flex; align-items: center; gap: 9px; font-size: 14px; color: var(--ink); cursor: pointer; }
   .toggle input { width: 17px; height: 17px; accent-color: var(--accent); flex: none; }
-  .buttons { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; padding-top: 6px; }
+  .buttons { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; padding-top: 6px; align-items: center; }
   button {
     font: inherit; font-weight: 600; padding: 9px 15px; border: 1px solid var(--line); border-radius: 10px;
     cursor: pointer; background: #ffffff12; color: var(--ink); transition: transform .12s, background .15s, box-shadow .15s;
@@ -66,6 +73,9 @@
   button.primary:hover:not(:disabled) { background: linear-gradient(90deg, #1d4ed8, #6d28d9); }
   button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   button:disabled { opacity: .5; cursor: wait; }
+  button.danger { border-color: #f8717166; color: #fca5a5; }
+  button.danger:hover:not(:disabled) { background: #f8717126; }
+  .spacer { flex: 1; }
   .banner { padding: 10px 12px; border: 1px solid var(--warn); color: var(--warn); background: #fbbf2414; border-radius: 10px; margin-top: 12px; }
   .saved { color: var(--ok); margin-top: 10px; min-height: 22px; }
   pre { white-space: pre-wrap; overflow-wrap: anywhere; font: 14px/1.55 "Segoe UI", system-ui, sans-serif; margin: 0; }
@@ -74,7 +84,6 @@
   .card:first-child { margin-top: 0; }
   .card.warning { border-color: #fbbf2466; border-left-color: var(--warn); }
   .card .muted { margin-bottom: 6px; }
-  #schedule { margin-top: 14px; }
   #pnl-text { font-weight: 700; }
   .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
   .tile { position: relative; overflow: hidden; background: #0b1224b3; border: 1px solid var(--line); border-radius: 12px; padding: 13px 15px; }
@@ -97,18 +106,30 @@
   .account-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
   .chip { display: inline-flex; align-items: center; gap: 7px; }
   .chip[aria-pressed="true"] { background: linear-gradient(90deg, #2563eb, #7c3aed); border-color: transparent; color: #fff; }
-  .chip .tag { font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 999px; background: #dc2626; color: #fff; }
-  .chip .tag.off { background: #ffffff1f; color: var(--muted); }
-  #add-form { margin-top: 14px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  input[type=text], input[type=password] {
-    font: inherit; font-weight: 500; color: var(--ink); padding: 9px 10px; border: 1px solid var(--line);
-    border-radius: 10px; width: 100%; background: #0b1224;
+  .tag { font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 999px; background: #dc2626; color: #fff; }
+  .tag.alerts { background: #2563eb; }
+  .tag.off { background: #ffffff1f; color: var(--muted); }
+  #add-form { margin-top: 14px; }
+  .strategy-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+  .strategy-card {
+    display: grid; gap: 10px; align-content: start; text-align: left; padding: 18px; border-radius: 16px;
+    background: var(--panel); border: 1px solid var(--line); box-shadow: 0 12px 34px #00000059; color: var(--ink);
+    text-decoration: none; transition: transform .12s, border-color .15s;
   }
-  button.danger { border-color: #f8717166; color: #fca5a5; }
-  button.danger:hover:not(:disabled) { background: #f8717126; }
-  .spacer { flex: 1; }
+  .strategy-card:hover { transform: translateY(-2px); border-color: #60a5fa80; }
+  .strategy-card .name { font-size: 18px; font-weight: 700; }
+  .strategy-card ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+  .strategy-card li { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+  .deploy-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; }
+  .deploy-bar label { min-width: 220px; }
+  .deploy-card { margin-top: 16px; }
+  .deploy-card .card-head { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; }
+  .deploy-card .summary { grid-column: 1 / -1; margin-top: 0; }
+  .deploy-card .status, .deploy-card .error { grid-column: 1 / -1; margin-top: 0; }
+  .deploy-card .status:empty { display: none; }
+  .back { color: var(--accent); text-decoration: none; font-weight: 600; }
   [hidden] { display: none !important; }
-  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } button:hover:not(:disabled) { transform: none; } }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } button:hover:not(:disabled), .strategy-card:hover { transform: none; } }
   @media (max-width: 900px) {
     form { grid-template-columns: minmax(0, 1fr); }
     .fields.four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -128,120 +149,113 @@
       <span class="pill">🕒 <span id="clock"></span> IST</span>
     </div>
   </header>
+  <nav>
+    <a href="#/" id="nav-home">🏠 Strategies</a>
+    <a href="#/accounts" id="nav-accounts">👥 Accounts</a>
+  </nav>
   <div id="telegram-banner" class="banner" hidden>Telegram is turned on but isn't set up, so alerts will only show in the logs. Add your details to the .env file and restart.</div>
-
-  <section class="panel">
-    <h2>👥 Accounts <span class="muted">each runs the same strategy with its own settings</span></h2>
-    <div class="account-bar">
-      <div id="account-chips" class="account-bar"></div>
-      <button id="show-add" type="button">＋ Add account</button>
-    </div>
-    <form id="add-form" hidden autocomplete="off">
-      <label>Account name
-        <input id="new-name" type="text" maxlength="30" required>
-      </label>
-      <label>Delta API key
-        <input id="new-key" type="text" spellcheck="false" required>
-      </label>
-      <label>Delta API secret
-        <input id="new-secret" type="password" autocomplete="new-password" required>
-      </label>
-      <div class="buttons">
-        <button class="primary" type="submit">Check keys and add</button>
-        <button id="cancel-add" type="button">Cancel</button>
-      </div>
-      <div class="muted" style="grid-column: 1 / -1">
-        First add this server's IP <strong>65.2.227.93</strong> to the key's allowed IPs in Delta, with trading permission.
-        The app checks the keys with Delta before saving. A new account starts with alerts and live trading off.
-        Only add keys on mobile data or your home network, as this page isn't encrypted.
-      </div>
-    </form>
-    <div id="add-status" class="saved" role="status"></div>
-    <div id="add-error" class="banner" role="alert" hidden></div>
-    <div id="no-accounts" class="banner" hidden>No accounts yet. Add one to start.</div>
-  </section>
-
-  <div id="account-view">
-  <section class="panel">
-    <h2>💰 <span id="account-name">Account</span> <span id="account-time" class="muted"></span></h2>
-    <div id="account-tiles" class="tiles"></div>
-    <div id="account-error" class="banner" role="alert" hidden></div>
-    <div class="table-scroll">
-      <table id="positions-table" hidden>
-        <thead><tr><th>Position</th><th>Size</th><th>Entry</th><th>Mark</th><th>PnL</th></tr></thead>
-        <tbody id="positions-body"></tbody>
-      </table>
-    </div>
-  </section>
-
-  <section class="panel">
-  <form id="form">
-    <fieldset class="group-box wide">
-      <legend>🎯 STRIKE SELECTION</legend>
-      <div class="fields four">
-        <label>Symbol
-          <select id="symbol"><option>BTC</option><option>ETH</option></select>
-        </label>
-        <label>Expiry
-          <select id="expiry"></select>
-        </label>
-        <label>Multiplier
-          <input id="multiplier" type="number" step="any" min="0.01" required>
-        </label>
-        <label>ATM reference
-          <select id="atm_reference"><option value="spot">Spot</option><option value="futures">Futures</option></select>
-        </label>
-      </div>
-    </fieldset>
-
-    <fieldset class="group-box">
-      <legend>⏰ SCHEDULE</legend>
-      <div class="fields">
-        <label>Entry time (IST)
-          <input id="entry_time" type="time" required>
-        </label>
-        <label class="toggle"><input id="enabled" type="checkbox"> Run the alert every day at the entry time</label>
-      </div>
-    </fieldset>
-
-    <fieldset class="group-box">
-      <legend>📊 PNL UPDATES</legend>
-      <div class="fields">
-        <label>PnL interval (minutes)
-          <input id="pnl_interval_minutes" type="number" step="1" min="1" max="1440" required>
-        </label>
-        <label class="toggle"><input id="pnl_enabled" type="checkbox"> Send account PnL to Telegram while positions are open</label>
-      </div>
-    </fieldset>
-
-    <fieldset class="group-box danger">
-      <legend>⚡ LIVE TRADING</legend>
-      <div class="fields">
-        <label>Order size (contracts per side)
-          <input id="trade_size" type="number" step="1" min="1" max="1000" required>
-        </label>
-        <label class="toggle"><input id="trading_enabled" type="checkbox"> Place real orders at the scheduled entry time</label>
-      </div>
-    </fieldset>
-
-    <div class="buttons">
-      <button class="primary" type="submit">Save settings</button>
-      <button id="send-now" type="button">Run alert now</button>
-      <button id="check-pnl" type="button">Check PnL</button>
-      <span class="spacer"></span>
-      <button id="remove-account" class="danger" type="button">Remove account</button>
-    </div>
-  </form>
-  <div id="schedule" class="card"></div>
-  <div id="status" class="saved" role="status"></div>
   <div id="error" class="banner" role="alert" hidden></div>
 
-  <div id="pnl-section" class="section" hidden>
-    <h2>📊 Latest PnL</h2>
-    <div id="pnl-card" class="card"><div id="pnl-meta" class="muted"></div><pre id="pnl-text"></pre></div>
+  <!-- Home: the strategies -->
+  <div id="view-home" hidden>
+    <div id="strategy-grid" class="strategy-grid"></div>
   </div>
 
-  </section>
+  <!-- One strategy and its deployments -->
+  <div id="view-strategy" hidden>
+    <section class="panel">
+      <a class="back" href="#/">← All strategies</a>
+      <h2 style="margin-top: 10px"><span id="strategy-title"></span></h2>
+      <div id="strategy-description" class="muted"></div>
+      <div class="deploy-bar section">
+        <label>Deploy to account
+          <select id="deploy-account"></select>
+        </label>
+        <button id="deploy-button" class="primary" type="button">＋ Deploy</button>
+      </div>
+      <div id="deploy-status" class="saved" role="status"></div>
+      <div id="no-deployments" class="banner" hidden>Not deployed to any account yet.</div>
+      <div id="deploy-needs-account" class="banner" hidden>Add an account first, on the Accounts page.</div>
+    </section>
+    <div id="deployment-cards"></div>
+  </div>
+
+  <!-- Accounts -->
+  <div id="view-accounts" hidden>
+    <section class="panel">
+      <h2>👥 Accounts</h2>
+      <div class="account-bar">
+        <div id="account-chips" class="account-bar"></div>
+        <button id="show-add" type="button">＋ Add account</button>
+      </div>
+      <form id="add-form" hidden autocomplete="off">
+        <label>Account name
+          <input id="new-name" type="text" maxlength="30" required>
+        </label>
+        <label>Delta API key
+          <input id="new-key" type="text" spellcheck="false" required>
+        </label>
+        <label>Delta API secret
+          <input id="new-secret" type="password" autocomplete="new-password" required>
+        </label>
+        <div class="buttons">
+          <button class="primary" type="submit">Check keys and add</button>
+          <button id="cancel-add" type="button">Cancel</button>
+        </div>
+        <div class="muted" style="grid-column: 1 / -1">
+          First add this server's IP <strong>65.2.227.93</strong> to the key's allowed IPs in Delta, with trading permission.
+          The app checks the keys with Delta before saving. Deploy strategies to it from the Strategies page.
+          Only add keys on mobile data or your home network, as this page isn't encrypted.
+        </div>
+      </form>
+      <div id="add-status" class="saved" role="status"></div>
+      <div id="add-error" class="banner" role="alert" hidden></div>
+      <div id="no-accounts" class="banner" hidden>No accounts yet. Add one to start.</div>
+    </section>
+
+    <div id="account-view">
+      <section class="panel">
+        <h2>💰 <span id="account-name">Account</span> <span id="account-time" class="muted"></span></h2>
+        <div id="account-tiles" class="tiles"></div>
+        <div id="account-error" class="banner" role="alert" hidden></div>
+        <div class="table-scroll">
+          <table id="positions-table" hidden>
+            <thead><tr><th>Position</th><th>Size</th><th>Entry</th><th>Mark</th><th>PnL</th></tr></thead>
+            <tbody id="positions-body"></tbody>
+          </table>
+        </div>
+        <div class="section">
+          <h2>🧩 Strategies on this account</h2>
+          <div id="account-deployments" class="muted"></div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <form id="pnl-form">
+          <fieldset class="group-box">
+            <legend>📊 PNL UPDATES</legend>
+            <div class="fields">
+              <label>PnL interval (minutes)
+                <input id="pnl_interval_minutes" type="number" step="1" min="1" max="1440" required>
+              </label>
+              <label class="toggle"><input id="pnl_enabled" type="checkbox"> Send account PnL to Telegram while positions are open</label>
+            </div>
+          </fieldset>
+          <div class="buttons">
+            <button class="primary" type="submit">Save PnL settings</button>
+            <button id="check-pnl" type="button">Check PnL</button>
+            <span class="spacer"></span>
+            <button id="remove-account" class="danger" type="button">Remove account</button>
+          </div>
+        </form>
+        <div id="account-status" class="saved" role="status"></div>
+        <div id="account-form-error" class="banner" role="alert" hidden></div>
+        <div id="pnl-section" class="section" hidden>
+          <h2>📊 Latest PnL</h2>
+          <div id="pnl-card" class="card"><div id="pnl-meta" class="muted"></div><pre id="pnl-text"></pre></div>
+        </div>
+      </section>
+    </div>
   </div>
 
   <section class="panel">
@@ -253,6 +267,11 @@
 <script>
 const el = id => document.getElementById(id);
 
+let state = null;
+let selectedAccountId = null;
+let renderedStrategy = null;
+let renderedDeploymentIds = "";
+
 async function api(path, body) {
   const options = body === undefined ? {} : {
     method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body),
@@ -263,66 +282,51 @@ async function api(path, body) {
   return data;
 }
 
+function make(tag, props = {}, ...children) {
+  const node = document.createElement(tag);
+  for (const [key, value] of Object.entries(props)) {
+    if (key === "dataset") Object.assign(node.dataset, value);
+    else if (key in node) node[key] = value;
+    else node.setAttribute(key, value);
+  }
+  node.append(...children);
+  return node;
+}
+
 function showError(message) {
   el("error").textContent = message;
   el("error").hidden = !message;
 }
 
-let accounts = [];
-let selectedId = null;
-
-function selected() {
-  return accounts.find(account => account.id === selectedId) || null;
+function accountById(id) {
+  return state.accounts.find(account => account.id === id) || null;
 }
 
-function formValues() {
-  return {
-    id: selectedId,
-    symbol: el("symbol").value,
-    expiry: el("expiry").value,
-    multiplier: el("multiplier").valueAsNumber,
-    atm_reference: el("atm_reference").value,
-    entry_time: el("entry_time").value,
-    enabled: el("enabled").checked,
-    pnl_enabled: el("pnl_enabled").checked,
-    pnl_interval_minutes: el("pnl_interval_minutes").valueAsNumber,
-    trading_enabled: el("trading_enabled").checked,
-    trade_size: el("trade_size").valueAsNumber,
-  };
+function deploymentsOf(strategy) {
+  return state.deployments.filter(d => d.strategy === strategy && accountById(d.account_id));
 }
 
-async function loadExpiries(selected) {
-  const select = el("expiry");
-  select.replaceChildren(new Option("Loading…", ""));
-  try {
-    const {expiries} = await api(`/api/expiries?symbol=${el("symbol").value}`);
-    select.replaceChildren(new Option("Select expiry", ""),
-      ...expiries.map(expiry => new Option(expiry.label, expiry.value)));
-    if (selected && expiries.some(expiry => expiry.value === selected)) {
-      select.value = selected;
-    } else if (selected) {
-      showError("Your saved expiry is no longer listed. Select a new one and save.");
-    }
-  } catch (error) {
-    select.replaceChildren(new Option("Could not load expiries", ""));
-    showError(error.message);
-  }
+function statusTag(d) {
+  const [text, kind] = d.trading_enabled ? ["LIVE", ""] : d.enabled ? ["ALERTS", "alerts"] : ["OFF", "off"];
+  return make("span", {className: `tag ${kind}`.trim(), textContent: text});
 }
 
 function renderMessage(target, message) {
   // The odd-numbered parts are the captured "SELL CALL/PUT <strike>" and "Stoploss: <price>" text.
   target.replaceChildren(...message.split(/^(SELL (?:CALL|PUT) [\d,.]+|Stoploss: \S+)/m).map((part, index) => {
     if (index % 2 === 0) return document.createTextNode(part);
-    const strong = document.createElement("strong");
-    strong.textContent = part;
-    strong.className = part.startsWith("Stoploss") ? "stoploss" : "sell";
-    return strong;
+    return make("strong", {textContent: part, className: part.startsWith("Stoploss") ? "stoploss" : "sell"});
   }));
 }
 
 function money(value) {
   return value === null || value === undefined ? "n/a"
     : value.toLocaleString("en-US", {minimumFractionDigits: 2, maximumFractionDigits: 2});
+}
+
+function rupees(value) {
+  return value === null || value === undefined ? ""
+    : `${value < 0 ? "-" : ""}₹${Math.abs(value).toLocaleString("en-IN", {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
 }
 
 function signedPnl(target, value, inr) {
@@ -335,27 +339,260 @@ function signedPnl(target, value, inr) {
   target.textContent = `${up ? "▲ +" : down ? "▼ " : ""}${amount}`;
 }
 
-function rupees(value) {
-  return value === null || value === undefined ? ""
-    : `${value < 0 ? "-" : ""}₹${Math.abs(value).toLocaleString("en-IN", {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+// ---------- Expiries, shared by every deployment card ----------
+
+const expiryCache = {};
+
+function expiriesFor(symbol) {
+  if (!expiryCache[symbol]) {
+    expiryCache[symbol] = api(`/api/expiries?symbol=${symbol}`).then(data => data.expiries)
+      .catch(error => { delete expiryCache[symbol]; throw error; });
+  }
+  return expiryCache[symbol];
 }
 
-function tile(label, value, secondary, tone) {
-  const box = document.createElement("div");
-  box.className = "tile";
-  const name = document.createElement("div");
-  name.className = "muted";
-  name.textContent = label;
-  const number = document.createElement("div");
-  number.className = "tile-value" + (tone ? ` ${tone}` : "");
-  if (typeof value === "function") value(number); else number.textContent = value;
-  box.append(name, number);
-  if (secondary) {
-    const second = document.createElement("div");
-    second.className = "muted rupee";
-    second.textContent = secondary;
-    box.append(second);
+const EXPIRY_DAYS_AHEAD = 2;
+
+function istDayCode(daysAhead) {
+  // The date in IST, so the page agrees with the app on which day it is.
+  const day = new Date(Date.now() + 5.5 * 3600 * 1000 + daysAhead * 86400 * 1000);
+  const two = n => String(n).padStart(2, "0");
+  return two(day.getUTCDate()) + two(day.getUTCMonth() + 1) + two(day.getUTCFullYear() % 100);
+}
+
+const AUTO_EXPIRY = "auto:2";
+
+async function fillExpiries(select, symbol, selected, onError) {
+  // The first choice is automatic: the expiry 2 days after each entry date, shown as today's date.
+  select.replaceChildren(new Option("Loading…", ""));
+  try {
+    const expiries = await expiriesFor(symbol);
+    const autoDate = expiries.find(expiry => expiry.value === istDayCode(EXPIRY_DAYS_AHEAD));
+    const auto = new Option(autoDate ? `${autoDate.label} (auto)` : "Auto: not listed today, entry skipped", AUTO_EXPIRY);
+    const known = selected === AUTO_EXPIRY || expiries.some(expiry => expiry.value === selected);
+    // A saved date that has passed shows the placeholder, rather than quietly switching to another expiry.
+    select.replaceChildren(...(known ? [] : [new Option("Select expiry", "")]), auto,
+      ...expiries.map(expiry => new Option(expiry.label, expiry.value)));
+    select.value = known ? selected : "";
+    if (selected && !known) onError("The saved expiry is no longer listed. Select a new one and save.");
+  } catch (error) {
+    select.replaceChildren(new Option("Could not load expiries", ""));
+    onError(error.message);
   }
+}
+
+// ---------- Home: strategy cards ----------
+
+function plural(count, word) {
+  return `${count} ${word}${count === 1 ? "" : "s"}`;
+}
+
+function deployedText(deployments) {
+  const accounts = new Set(deployments.map(d => d.account_id)).size;
+  return deployments.length === accounts
+    ? `Deployed on ${plural(accounts, "account")}`
+    : `${plural(deployments.length, "deployment")} on ${plural(accounts, "account")}`;
+}
+
+function renderHome() {
+  el("strategy-grid").replaceChildren(...Object.entries(state.strategies).map(([key, strategy]) => {
+    const deployments = deploymentsOf(key);
+    const rows = deployments.length
+      ? deployments.map(d => make("li", {}, statusTag(d),
+          `👤 ${accountById(d.account_id).name} · ${d.entry_time} · ${d.symbol}${d.trading_enabled ? ` · size ${d.trade_size}` : ""}`))
+      : [make("li", {className: "muted", textContent: "Not deployed yet"})];
+    return make("a", {className: "strategy-card", href: `#/strategy/${key}`},
+      make("div", {className: "name", textContent: `${strategy.icon} ${strategy.name}`}),
+      make("div", {className: "muted", textContent: strategy.description}),
+      make("div", {className: "muted", textContent: deployedText(deployments)}),
+      make("ul", {}, ...rows));
+  }));
+}
+
+// ---------- Strategy page: deployment cards ----------
+
+function usesStoploss(d) {
+  const strategy = state.strategies[d.strategy];
+  return !strategy || strategy.stoploss;
+}
+
+function tradeText(trade) {
+  if (trade.state === "exiting") return "target hit, buying back";
+  if (trade.profit === null) return "waiting for fills";
+  return `profit ${trade.profit} of ${trade.target} points`;
+}
+
+function summaryText(d) {
+  const stops = d.pending_stops.filter(item => !item.no_stop).length;
+  const trades = d.open_trades || [];
+  return (d.enabled
+      ? `Saved schedule: ON. ${d.symbol} alert runs daily at ${d.entry_time} IST.`
+      : "Saved schedule: OFF. No alert will run at the entry time. Tick the daily box and save to turn it on.")
+    + (usesStoploss(d) ? "" : ` Target: ${d.target_percent}% of premium.`)
+    + (d.trading_enabled ? ` LIVE TRADING: ON, real orders of ${d.trade_size} per side.` : " Live trading: OFF.")
+    + (stops ? ` Watching ${stops} order(s) to place separate stoplosses.` : "")
+    + (trades.length ? ` Watching ${trades.length} trade(s) for the target: ${trades.map(tradeText).join("; ")}.` : "");
+}
+
+function field(text, input) {
+  return make("label", {}, text, input);
+}
+
+function toggle(input, text) {
+  return make("label", {className: "toggle"}, input, ` ${text}`);
+}
+
+function deploymentCard(d) {
+  const account = accountById(d.account_id);
+  const symbol = make("select", {}, new Option("BTC"), new Option("ETH"));
+  const expiry = make("select");
+  const multiplier = make("input", {type: "number", step: "any", min: "0.01", required: true});
+  const atm = make("select", {}, new Option("Spot", "spot"), new Option("Futures", "futures"));
+  const entryTime = make("input", {type: "time", required: true});
+  const enabled = make("input", {type: "checkbox"});
+  const size = make("input", {type: "number", step: "1", min: "1", max: "1000", required: true});
+  const trading = make("input", {type: "checkbox"});
+  const targetPercent = make("input", {type: "number", step: "any", min: "0.01", max: "100", required: true});
+  targetPercent.value = d.target_percent;
+  symbol.value = d.symbol;
+  multiplier.value = d.multiplier;
+  atm.value = d.atm_reference;
+  entryTime.value = d.entry_time;
+  enabled.checked = d.enabled;
+  size.value = d.trade_size;
+  trading.checked = d.trading_enabled;
+
+  const save = make("button", {className: "primary", type: "submit", textContent: "Save settings"});
+  const runNow = make("button", {type: "button", textContent: "Run alert now"});
+  const remove = make("button", {className: "danger", type: "button", textContent: "Remove deployment"});
+  const tag = statusTag(d);
+  const summary = make("div", {className: "card summary" + (d.enabled && !d.trading_enabled ? "" : " warning"),
+    textContent: summaryText(d)});
+  const status = make("div", {className: "saved status", role: "status"});
+  const error = make("div", {className: "banner error", role: "alert", hidden: true});
+  const setError = message => { error.textContent = message; error.hidden = !message; };
+
+  const form = make("form", {className: "panel deploy-card", autocomplete: "off", dataset: {id: d.id}},
+    make("div", {className: "card-head"}, make("h3", {}, `👤 ${account.name}`, tag)),
+    make("fieldset", {className: "group-box wide"}, make("legend", {textContent: "🎯 STRIKE SELECTION"}),
+      make("div", {className: "fields four"},
+        field("Symbol", symbol), field("Expiry", expiry), field("Multiplier", multiplier),
+        field("ATM reference", atm))),
+    make("fieldset", {className: "group-box"}, make("legend", {textContent: "⏰ SCHEDULE"}),
+      make("div", {className: "fields"}, field("Entry time (IST)", entryTime),
+        toggle(enabled, "Run the alert every day at the entry time"))),
+    make("fieldset", {className: "group-box danger"}, make("legend", {textContent: "⚡ LIVE TRADING"}),
+      make("div", {className: "fields"}, field("Order size (contracts per side)", size),
+        toggle(trading, "Place real orders at the scheduled entry time"))),
+    ...(usesStoploss(d) ? [] : [make("fieldset", {className: "group-box"}, make("legend", {textContent: "💰 TARGET"}),
+      make("div", {className: "fields"}, field("Target (% of premium)", targetPercent),
+        make("div", {className: "muted", textContent: "Buys both legs back once profit reaches this share of the "
+          + "premium received, judged on best ask. No stoploss. Held to expiry if it isn't reached."})))]),
+    make("div", {className: "buttons"}, save, runNow, make("span", {className: "spacer"}), remove),
+    summary, status, error);
+  form.liveParts = {tag, summary};
+
+  const values = () => ({
+    id: d.id, symbol: symbol.value, expiry: expiry.value, multiplier: multiplier.valueAsNumber,
+    atm_reference: atm.value, entry_time: entryTime.value, enabled: enabled.checked,
+    trading_enabled: trading.checked, trade_size: size.valueAsNumber, target_percent: targetPercent.valueAsNumber,
+  });
+  const run = async (button, work) => {
+    setError("");
+    status.textContent = "";
+    button.disabled = true;
+    try { await work(); } catch (problem) { setError(problem.message); } finally { button.disabled = false; }
+  };
+
+  // Dates differ between symbols, so a new symbol starts on the automatic expiry.
+  symbol.addEventListener("change", () => { setError(""); fillExpiries(expiry, symbol.value, AUTO_EXPIRY, setError); });
+  form.addEventListener("submit", event => {
+    event.preventDefault();
+    run(save, async () => {
+      await api("/api/settings", values());
+      status.textContent = "Settings saved.";
+      await refresh();
+    });
+  });
+  runNow.addEventListener("click", () => run(runNow, async () => {
+    const entry = await api("/api/send-now", values());
+    status.textContent = "Added to logs.";
+    await refresh();
+    return entry;
+  }));
+  remove.addEventListener("click", () => {
+    const ok = window.confirm(`Remove this deployment from ${account.name}? The app stops running this strategy `
+      + "on that account. Its open positions and stoplosses on Delta stay as they are.");
+    if (!ok) return;
+    run(remove, async () => {
+      await api("/api/deployments/remove", {id: d.id});
+      el("deploy-status").textContent = `Removed from ${account.name}.`;
+      await refresh();
+    });
+  });
+  fillExpiries(expiry, d.symbol, d.expiry, setError);
+  return form;
+}
+
+function renderStrategy(key) {
+  const strategy = state.strategies[key];
+  if (!strategy) { location.hash = "#/"; return; }
+  el("strategy-title").textContent = `${strategy.icon} ${strategy.name}`;
+  el("strategy-description").textContent = strategy.description;
+  const picker = el("deploy-account");
+  const chosen = picker.value;
+  const options = state.accounts.map(a => `${a.id}:${a.name}`).join(",");
+  if (picker.dataset.options !== options) {
+    picker.replaceChildren(...state.accounts.map(a => new Option(a.name, a.id)));
+    picker.dataset.options = options;
+    if (accountById(chosen)) picker.value = chosen;
+  }
+  el("deploy-needs-account").hidden = state.accounts.length > 0;
+  el("deploy-button").disabled = !state.accounts.length;
+
+  const deployments = deploymentsOf(key);
+  el("no-deployments").hidden = deployments.length > 0 || !state.accounts.length;
+  const ids = deployments.map(d => d.id).join(",");
+  if (renderedStrategy === key && renderedDeploymentIds === ids) {
+    // Same cards: update only what the app changes by itself, so typing isn't interrupted.
+    for (const d of deployments) {
+      const card = el("deployment-cards").querySelector(`[data-id="${d.id}"]`);
+      if (!card) continue;
+      card.liveParts.tag.replaceWith(card.liveParts.tag = statusTag(d));
+      card.liveParts.summary.textContent = summaryText(d);
+      card.liveParts.summary.className = "card summary" + (d.enabled && !d.trading_enabled ? "" : " warning");
+    }
+    return;
+  }
+  renderedStrategy = key;
+  renderedDeploymentIds = ids;
+  el("deployment-cards").replaceChildren(...deployments.map(deploymentCard));
+}
+
+el("deploy-button").addEventListener("click", async event => {
+  const button = event.currentTarget;
+  const key = renderedStrategy;
+  showError("");
+  button.disabled = true;
+  try {
+    const added = await api("/api/deployments/add", {account_id: el("deploy-account").value, strategy: key});
+    el("deploy-status").textContent = `Deployed to ${accountById(added.account_id).name}. `
+      + "Alerts and live trading are off until you set it up and save.";
+    await refresh();
+  } catch (error) {
+    showError(error.message);
+  } finally {
+    button.disabled = false;
+  }
+});
+
+// ---------- Accounts page ----------
+
+function tile(label, value, secondary, tone) {
+  const number = make("div", {className: "tile-value" + (tone ? ` ${tone}` : "")});
+  if (typeof value === "function") value(number); else number.textContent = value;
+  const box = make("div", {className: "tile"}, make("div", {className: "muted", textContent: label}), number);
+  if (secondary) box.append(make("div", {className: "muted rupee", textContent: secondary}));
   return box;
 }
 
@@ -381,32 +618,25 @@ function renderAccount(account) {
   const rows = account.positions ? account.positions.rows : [];
   el("positions-table").hidden = !rows.length;
   el("positions-body").replaceChildren(...rows.map(row => {
-    const line = document.createElement("tr");
-    const cells = [row.symbol, row.size, money(row.entry), money(row.mark)].map(text => {
-      const cell = document.createElement("td");
-      cell.textContent = text;
-      return cell;
-    });
-    const pnlCell = document.createElement("td");
+    const pnlCell = make("td");
     signedPnl(pnlCell, row.pnl, row.pnl_inr);
-    line.append(...cells, pnlCell);
-    return line;
+    return make("tr", {}, ...[row.symbol, row.size, money(row.entry), money(row.mark)]
+      .map(text => make("td", {textContent: text})), pnlCell);
   }));
-  el("account-time").textContent = `updated ${account.time} IST`
-    + (rows.length ? "" : " · no open positions");
+  el("account-time").textContent = `updated ${account.time} IST` + (rows.length ? "" : " · no open positions");
 }
 
 let accountLoading = false;
 
 async function refreshAccount() {
-  if (accountLoading || !selectedId) return;
+  if (accountLoading || !selectedAccountId || currentView() !== "accounts") return;
   accountLoading = true;
-  const id = selectedId;
+  const id = selectedAccountId;
   try {
     const data = await api(`/api/account?id=${encodeURIComponent(id)}`);
-    if (id === selectedId) renderAccount(data);
+    if (id === selectedAccountId) renderAccount(data);
   } catch (error) {
-    if (id === selectedId) {
+    if (id === selectedAccountId) {
       el("account-error").textContent = "Can't load account data right now.";
       el("account-error").hidden = false;
     }
@@ -431,125 +661,34 @@ function renderPnl(result) {
   el("pnl-section").hidden = false;
 }
 
-function renderLogs(logs) {
-  if (!logs.length) {
-    const empty = document.createElement("div");
-    empty.className = "muted";
-    empty.textContent = "No alerts logged yet.";
-    el("logs").replaceChildren(empty);
-    return;
+function renderAccounts() {
+  if (!accountById(selectedAccountId)) {
+    selectedAccountId = state.accounts.length ? state.accounts[0].id : null;
+    if (selectedAccountId) selectAccount(selectedAccountId);
   }
-  el("logs").replaceChildren(...logs.map(entry => {
-    const card = document.createElement("div");
-    card.className = "card" + (entry.kind === "warning" ? " warning" : "");
-    const meta = document.createElement("div");
-    meta.className = "muted";
-    meta.textContent = `${entry.time} IST · ${entry.account ? `👤 ${entry.account} · ` : ""}${entry.source}`
-      + (entry.telegram === "off" ? "" : ` · Telegram: ${entry.telegram}`);
-    const text = document.createElement("pre");
-    renderMessage(text, entry.message);
-    card.append(meta, text);
-    return card;
-  }));
-}
-
-function renderChips() {
-  el("account-chips").replaceChildren(...accounts.map(account => {
-    const chip = document.createElement("button");
-    chip.type = "button";
-    chip.className = "chip";
-    chip.setAttribute("aria-pressed", String(account.id === selectedId));
-    const name = document.createElement("span");
-    name.textContent = account.name;
-    const tag = document.createElement("span");
-    tag.className = "tag" + (account.trading_enabled ? "" : " off");
-    tag.textContent = account.trading_enabled ? "LIVE" : account.enabled ? "ALERTS" : "OFF";
-    chip.append(name, tag);
+  el("account-chips").replaceChildren(...state.accounts.map(account => {
+    const deployments = state.deployments.filter(d => d.account_id === account.id);
+    const live = deployments.some(d => d.trading_enabled);
+    const chip = make("button", {type: "button", className: "chip"},
+      make("span", {textContent: account.name}),
+      make("span", {className: "tag" + (live ? "" : " off"), textContent: live ? "LIVE" : plural(deployments.length, "strategy").replace("strategys", "strategies")}));
+    chip.setAttribute("aria-pressed", String(account.id === selectedAccountId));
     chip.addEventListener("click", () => selectAccount(account.id));
     return chip;
   }));
-  el("no-accounts").hidden = accounts.length > 0;
-  el("account-view").hidden = !selected();
-  const live = accounts.filter(account => account.trading_enabled).length;
-  el("trading-mode").textContent = live
-    ? `⚡ LIVE TRADING ON: ${live} of ${accounts.length} account${accounts.length === 1 ? "" : "s"}`
-    : "⏸️ Live trading OFF: alerts only";
-  el("trading-mode").className = "pill" + (live ? " live" : "");
-}
-
-async function refresh() {
-  try {
-    const state = await api("/api/state");
-    accounts = state.accounts;
-    if (!selected()) selectedId = accounts.length ? accounts[0].id : null;
-    el("clock").textContent = state.now;
-    el("telegram-banner").hidden = !state.telegram_enabled || state.telegram_configured;
-    renderLogs(state.logs);
-    renderChips();
-    const account = selected();
-    if (!account) return state;
-    renderPnl(state.pnl[account.id]);
-    const {enabled, entry_time, symbol, pnl_enabled, pnl_interval_minutes, trading_enabled, trade_size, pending_stops} = account;
-    el("account-name").textContent = `${account.name} ${account.api_key_hint ? `(key ${account.api_key_hint})` : ""}`;
-    el("schedule").textContent = (enabled
-      ? `Saved schedule: ON. ${symbol} alert runs daily at ${entry_time} IST.`
-      : "Saved schedule: OFF. No alert will run at the entry time. Tick the daily box and save to turn it on.")
-      + (pnl_enabled ? ` PnL updates: ON, every ${pnl_interval_minutes} min.` : " PnL updates: OFF.")
-      + (trading_enabled ? ` LIVE TRADING: ON, real orders of ${trade_size} per side.` : " Live trading: OFF.")
-      + (pending_stops.length ? ` Watching ${pending_stops.length} order(s) to place separate stoplosses. Keep the app running.` : "");
-    el("schedule").className = "card" + (enabled && !trading_enabled ? "" : " warning");
-    return state;
-  } catch (error) {
-    showError("Can't reach the app. Check that it's still running.");
-  }
-}
-
-async function action(button, work) {
-  showError("");
-  el("status").textContent = "";
-  button.disabled = true;
-  try {
-    await work();
-  } catch (error) {
-    showError(error.message);
-  } finally {
-    button.disabled = false;
-  }
-}
-
-el("symbol").addEventListener("change", () => { showError(""); loadExpiries(); });
-
-el("form").addEventListener("submit", event => {
-  event.preventDefault();
-  const values = formValues();
-  action(event.submitter, async () => {
-    await api("/api/settings", values);
-    el("status").textContent = "Settings saved.";
-    await refresh();
-  });
-});
-
-el("send-now").addEventListener("click", event => action(event.currentTarget, async () => {
-  const entry = await api("/api/send-now", formValues());
-  el("status").textContent = entry.telegram === "off" ? "Added to logs." : `Added to logs. Telegram: ${entry.telegram}`;
-  await refresh();
-}));
-
-el("check-pnl").addEventListener("click", event => action(event.currentTarget, async () => {
-  shownPnlTime = null;
-  renderPnl(await api(`/api/pnl?id=${encodeURIComponent(selectedId)}`));
-}));
-
-function fillForm(saved) {
-  el("symbol").value = saved.symbol;
-  el("multiplier").value = saved.multiplier;
-  el("atm_reference").value = saved.atm_reference;
-  el("entry_time").value = saved.entry_time;
-  el("enabled").checked = saved.enabled;
-  el("pnl_enabled").checked = saved.pnl_enabled;
-  el("pnl_interval_minutes").value = saved.pnl_interval_minutes;
-  el("trading_enabled").checked = saved.trading_enabled;
-  el("trade_size").value = saved.trade_size;
+  el("no-accounts").hidden = state.accounts.length > 0;
+  const account = accountById(selectedAccountId);
+  el("account-view").hidden = !account;
+  if (!account) return;
+  el("account-name").textContent = `${account.name} ${account.api_key_hint ? `(key ${account.api_key_hint})` : ""}`;
+  renderPnl(state.pnl[account.id]);
+  const deployments = state.deployments.filter(d => d.account_id === account.id);
+  el("account-deployments").replaceChildren(...(deployments.length ? deployments.map(d => {
+    const strategy = state.strategies[d.strategy];
+    return make("div", {}, statusTag(d), " ",
+      make("a", {className: "back", href: `#/strategy/${d.strategy}`, textContent: strategy ? `${strategy.icon} ${strategy.name}` : d.strategy}),
+      ` · ${d.entry_time} · ${d.symbol}`);
+  }) : [make("div", {textContent: "None yet. Deploy a strategy from the Strategies page."})]));
 }
 
 function remember(id) {
@@ -560,23 +699,69 @@ function remembered() {
   try { return localStorage.getItem("account"); } catch (error) { return null; }
 }
 
-async function selectAccount(id) {
-  selectedId = id;
+function selectAccount(id) {
+  selectedAccountId = id;
   remember(id);
-  showError("");
-  el("status").textContent = "";
+  el("account-status").textContent = "";
+  el("account-form-error").hidden = true;
   el("account-tiles").replaceChildren();
   el("positions-table").hidden = true;
   el("account-error").hidden = true;
   el("account-time").textContent = "loading…";
   shownPnlTime = null;
-  await refresh();
-  const account = selected();
-  if (!account) return;
-  fillForm(account);
+  const account = accountById(id);
+  if (account) {
+    el("pnl_enabled").checked = account.pnl_enabled;
+    el("pnl_interval_minutes").value = account.pnl_interval_minutes;
+  }
+  renderAccounts();
   refreshAccount();
-  await loadExpiries(account.expiry);
 }
+
+function showAccountError(message) {
+  el("account-form-error").textContent = message;
+  el("account-form-error").hidden = !message;
+}
+
+async function accountAction(button, work) {
+  showAccountError("");
+  el("account-status").textContent = "";
+  button.disabled = true;
+  try { await work(); } catch (error) { showAccountError(error.message); } finally { button.disabled = false; }
+}
+
+el("pnl-form").addEventListener("submit", event => {
+  event.preventDefault();
+  accountAction(event.submitter, async () => {
+    await api("/api/accounts/pnl", {
+      id: selectedAccountId, pnl_enabled: el("pnl_enabled").checked,
+      pnl_interval_minutes: el("pnl_interval_minutes").valueAsNumber,
+    });
+    el("account-status").textContent = "PnL settings saved.";
+    await refresh();
+  });
+});
+
+el("check-pnl").addEventListener("click", event => accountAction(event.currentTarget, async () => {
+  shownPnlTime = null;
+  renderPnl(await api(`/api/pnl?id=${encodeURIComponent(selectedAccountId)}`));
+}));
+
+el("remove-account").addEventListener("click", event => {
+  const account = accountById(selectedAccountId);
+  if (!account) return;
+  const ok = window.confirm(
+    `Remove ${account.name}? The app stops all its strategies and deletes its saved keys. `
+    + "Its open positions and stoplosses on Delta stay as they are."
+  );
+  if (!ok) return;
+  accountAction(event.currentTarget, async () => {
+    await api("/api/accounts/remove", {id: account.id});
+    el("add-status").textContent = `Removed ${account.name}.`;
+    selectedAccountId = null;
+    await refresh();
+  });
+});
 
 function showAddError(message) {
   el("add-error").textContent = message;
@@ -609,8 +794,9 @@ el("add-form").addEventListener("submit", event => {
       });
       el("add-form").reset();
       el("add-form").hidden = true;
-      el("add-status").textContent = `Added ${added.name}. Alerts and live trading are off until you turn them on and save.`;
-      await selectAccount(added.id);
+      el("add-status").textContent = `Added ${added.name}. Deploy a strategy to it from the Strategies page.`;
+      await refresh();
+      selectAccount(added.id);
     } catch (error) {
       el("add-status").textContent = "";
       showAddError(error.message);
@@ -620,29 +806,76 @@ el("add-form").addEventListener("submit", event => {
   })();
 });
 
-el("remove-account").addEventListener("click", event => {
-  const account = selected();
-  if (!account) return;
-  const ok = window.confirm(
-    `Remove ${account.name}? The app stops trading and sending alerts for it, and deletes its saved keys. `
-    + "Its open positions and stoplosses on Delta stay as they are."
-  );
-  if (!ok) return;
-  action(event.currentTarget, async () => {
-    await api("/api/accounts/remove", {id: account.id});
-    el("add-status").textContent = `Removed ${account.name}.`;
-    selectedId = null;
-    await refresh();
-    if (selectedId) await selectAccount(selectedId);
-  });
+// ---------- Logs, header and navigation ----------
+
+function renderLogs(logs) {
+  if (!logs.length) {
+    el("logs").replaceChildren(make("div", {className: "muted", textContent: "No alerts logged yet."}));
+    return;
+  }
+  el("logs").replaceChildren(...logs.map(entry => {
+    const meta = make("div", {className: "muted", textContent: `${entry.time} IST · `
+      + (entry.account ? `👤 ${entry.account} · ` : "") + (entry.strategy ? `${entry.strategy} · ` : "")
+      + entry.source + (entry.telegram === "off" ? "" : ` · Telegram: ${entry.telegram}`)});
+    const text = make("pre");
+    renderMessage(text, entry.message);
+    return make("div", {className: "card" + (entry.kind === "warning" ? " warning" : "")}, meta, text);
+  }));
+}
+
+function renderHeader() {
+  el("clock").textContent = state.now;
+  el("telegram-banner").hidden = !state.telegram_enabled || state.telegram_configured;
+  const live = state.deployments.filter(d => d.trading_enabled && accountById(d.account_id)).length;
+  el("trading-mode").textContent = live
+    ? `⚡ LIVE TRADING ON: ${live} deployment${live === 1 ? "" : "s"}` : "⏸️ Live trading OFF: alerts only";
+  el("trading-mode").className = "pill" + (live ? " live" : "");
+}
+
+function currentView() {
+  const hash = location.hash;
+  if (hash === "#/accounts") return "accounts";
+  if (hash.startsWith("#/strategy/")) return "strategy";
+  return "home";
+}
+
+function renderView() {
+  if (!state) return;
+  const view = currentView();
+  for (const name of ["home", "strategy", "accounts"]) el(`view-${name}`).hidden = name !== view;
+  el("nav-home").setAttribute("aria-current", view === "accounts" ? "false" : "page");
+  el("nav-accounts").setAttribute("aria-current", view === "accounts" ? "page" : "false");
+  if (view === "home") renderHome();
+  if (view === "strategy") renderStrategy(decodeURIComponent(location.hash.slice("#/strategy/".length)));
+  if (view === "accounts") renderAccounts();
+}
+
+async function refresh() {
+  try {
+    state = await api("/api/state");
+    renderHeader();
+    renderLogs(state.logs);
+    renderView();
+    return state;
+  } catch (error) {
+    showError("Can't reach the app. Check that it's still running.");
+  }
+}
+
+window.addEventListener("hashchange", () => {
+  showError("");
+  el("deploy-status").textContent = "";
+  renderedStrategy = null;
+  renderView();
+  if (currentView() === "accounts" && selectedAccountId) selectAccount(selectedAccountId);
 });
 
 (async () => {
-  const state = await refresh();
+  await refresh();
   if (!state) return;
   const saved = remembered();
-  if (saved && state.accounts.some(account => account.id === saved)) selectedId = saved;
-  if (selectedId) await selectAccount(selectedId);
+  selectedAccountId = saved && accountById(saved) ? saved : (state.accounts[0] || {}).id || null;
+  if (currentView() === "accounts" && selectedAccountId) selectAccount(selectedAccountId);
   setInterval(refreshAccount, 5000);
   setInterval(refresh, 5000);
 })();
